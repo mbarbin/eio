@@ -81,6 +81,45 @@ val split : 'a t -> ('a t * string) option
     - [split (root, "/") = None]
 *)
 
+val basename : _ t -> string
+(** [basename t] returns the last path component in [t]. The returned value is equal to
+    the basename returned by split, when [split t] returns [Some (_, basename)].
+    {!basename} matches the behavior of the unix command [basename].
+
+   For example:
+
+    - [basename (root, "foo/bar") = "bar"]
+    - [basename (root, "/foo/bar") = "bar"]
+    - [basename (root, "/foo/bar/baz") = "baz"]
+    - [basename (root, "/foo/bar//baz/") = "baz"]
+    - [basename (root, "bar") = "bar"]
+    - [basename (root, ".") = "."]
+    - [basename (root, "") = ""]
+    - [basename (root, "/") = "/"]
+*)
+
+val dirname : _ t -> string
+(** [dirname t] will retrieve the directory-path name from a pathname ignoring any
+    trailing slashes. When [split t] returns [Some ((_, dir), _)], [dirname t] is equal
+    to [dir] unless [dir = ""], in which case [dirname t = "."]. {!dirname} matches the
+    behavior of the unix command [dirname].
+
+    For example:
+
+    - [dirname (root, "foo/bar") = "foo"]
+    - [dirname (root, "/foo/bar") = "/foo"]
+    - [dirname (root, "/foo/bar/baz") = "/foo/bar"]
+    - [dirname (root, "/foo/bar//baz/") = "/foo/bar"]
+    - [dirname (root, "bar") = "."]
+    - [dirname (root, ".") = "."]
+    - [dirname (root, "") = "."]
+    - [dirname (root, "/") = "/"]
+*)
+
+val parent_dir : 'a t -> 'a t
+(** [parent_dir p] is [p]'s parent directory. This is a convenience wrapper around
+    {!dirname} that returns the parent directory as a path. *)
+
 (** {1 Reading files} *)
 
 val load : _ t -> string

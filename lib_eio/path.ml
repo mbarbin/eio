@@ -53,6 +53,27 @@ let split (dir, p) =
       in
       Some ((dir, dirname), basename)
 
+let basename t =
+  match split t with
+  | Some (_, p) -> p
+  | None ->
+    (match t |> snd |> remove_trailing_slashes with
+     | ("" | "/") as p -> p
+     | _ -> failwith "Eio.Path.basename: invalid path")
+
+let dirname t =
+  match split t with
+  | Some ((_, dir), _) ->
+    let len = String.length dir in
+    if len = 0 then "." else dir
+  | None ->
+    (match t |> snd |> remove_trailing_slashes  with
+     | "" -> "."
+     | "/" -> "/"
+     | _ -> failwith "Eio.Path.dirname: invalid path")
+
+let parent_dir ((root, _) as t) = root, dirname t
+
 let open_in ~sw t =
   let (Resource.T (dir, ops), path) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
