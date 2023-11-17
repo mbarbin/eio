@@ -67,7 +67,7 @@ let dirname t =
     let len = String.length dir in
     if len = 0 then "." else dir
   | None ->
-    (match t |> snd |> remove_trailing_slashes  with
+    (match t |> snd |> remove_trailing_slashes with
      | "" -> "."
      | "/" -> "/"
      | _ -> failwith "Eio.Path.dirname: invalid path")
