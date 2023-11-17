@@ -38,39 +38,37 @@ let remove_trailing_slashes s =
   in
   aux (String.length s)
 
-let split (dir, p) =
+let split_internal (dir, p) =
   match remove_trailing_slashes p with
-  | "" -> None
-  | "/" -> None
+  | "" -> `Empty
+  | "/" -> `Slash
   | p ->
     match String.rindex_opt p '/' with
-    | None -> Some ((dir, ""), p)
+    | None -> `Split ((dir, ""), p)
     | Some idx ->
       let basename = string_drop p (idx + 1) in
       let dirname =
         if idx = 0 then "/"
         else remove_trailing_slashes (String.sub p 0 idx)
       in
-      Some ((dir, dirname), basename)
+      `Split ((dir, dirname), basename)
+
+let split t =
+  match split_internal t with
+  | `Empty | `Slash -> None
+  | `Split x -> Some x
 
 let basename t =
-  match split t with
-  | Some (_, p) -> p
-  | None ->
-    (match t |> snd |> remove_trailing_slashes with
-     | ("" | "/") as p -> p
-     | _ -> failwith "Eio.Path.basename: invalid path")
+  match split_internal t with
+  | `Empty -> ""
+  | `Slash -> "/"
+  | `Split (_, p) -> p
 
 let dirname t =
-  match split t with
-  | Some ((_, dir), _) ->
-    let len = String.length dir in
-    if len = 0 then "." else dir
-  | None ->
-    (match t |> snd |> remove_trailing_slashes with
-     | "" -> "."
-     | "/" -> "/"
-     | _ -> failwith "Eio.Path.dirname: invalid path")
+  match split_internal t with
+  | `Empty -> "."
+  | `Slash -> "/"
+  | `Split ((_, dir), _) -> if String.length dir = 0 then "." else dir
 
 let parent_dir ((root, _) as t) = root, dirname t
 
