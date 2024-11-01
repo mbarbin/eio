@@ -75,6 +75,7 @@ module Pi = struct
     val native : t -> string -> string option
   end
 
-  type (_, _, _) Resource.pi +=
-    | Dir : ('t, (module DIR with type t = 't), [> dir_ty]) Resource.pi
+  module Dir : sig
+    val pi : ('t, (module DIR with type t = 't), [> dir_ty]) Resource.pi
+  end = Resource.Pi.Create (struct type 't iface = (module DIR with type t = 't) end)
 end

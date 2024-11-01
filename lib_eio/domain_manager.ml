@@ -10,19 +10,20 @@ module Pi = struct
     val run_raw : t -> (unit -> 'a) -> 'a
   end
 
-  type (_, _, _) Resource.pi +=
-    | Mgr : ('t, (module MGR with type t = 't), [> ty]) Resource.pi
+  module Mgr : sig
+    val pi : ('t, (module MGR with type t = 't), [> ty]) Resource.pi
+  end = Resource.Pi.Create (struct type 't iface = (module MGR with type t = 't) end)
 
   let mgr (type t) (module X : MGR with type t = t) =
-    Resource.handler [H (Mgr, (module X))]
+    Resource.handler [H (Mgr.pi, (module X))]
 end
 
 let run_raw (Resource.T (t, ops)) fn =
-  let module X = (val (Resource.get ops Pi.Mgr)) in
+  let module X = (val (Resource.get ops Pi.Mgr.pi)) in
   X.run_raw t fn
 
 let run (Resource.T (t, ops)) fn =
-  let module X = (val (Resource.get ops Pi.Mgr)) in
+  let module X = (val (Resource.get ops Pi.Mgr.pi)) in
   X.run t @@ fun ~cancelled ->
   (* If the spawning fiber is cancelled, [cancelled] gets set to the exception. *)
   try

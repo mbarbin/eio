@@ -51,12 +51,19 @@ module Pi = struct
     val signal : t -> int -> unit
   end
 
-  type (_, _, _) Resource.pi +=
-    | Process : ('t, (module PROCESS with type t = 't and type tag = 'tag), [> 'tag ty]) Resource.pi
+  module Process : sig
+    val pi : ('t, (module PROCESS with type t = 't and type tag = 'tag), [> 'tag ty]) Resource.pi
+  end = struct
+    module P = Resource.Pi.Create (struct
+      type 't iface = (module PROCESS with type t = 't)
+      end)
+    (* CR mbarbin: Doesn't work. *)
+    let pi = Obj.magic P.pi
+  end
 
   let process (type t tag) (module X : PROCESS with type t = t and type tag = tag) =
     Resource.handler [
-      H (Process, (module X));
+      H (Process.pi, (module X));
     ]
 
   module type MGR = sig
@@ -81,12 +88,19 @@ module Pi = struct
       tag ty r
   end
 
-  type (_, _, _) Resource.pi +=
-    | Mgr : ('t, (module MGR with type t = 't and type tag = 'tag), [> 'tag mgr_ty]) Resource.pi
+  module Mgr : sig
+    val pi : ('t, (module MGR with type t = 't and type tag = 'tag), [> 'tag mgr_ty]) Resource.pi
+  end = struct
+    module P = Resource.Pi.Create (struct
+      type 't iface = (module MGR with type t = 't)
+      end)
+    (* CR mbarbin: Doesn't work. *)
+    let pi = Obj.magic P.pi
+  end
 
   let mgr (type t tag) (module X : MGR with type t = t and type tag = tag) =
     Resource.handler [
-      H (Mgr, (module X));
+      H (Mgr.pi, (module X));
     ]
 end
 
@@ -103,7 +117,7 @@ let pp_arg f x =
 let pp_args = Fmt.hbox (Fmt.list ~sep:Fmt.sp pp_arg)
 
 let await (type tag) ((Resource.T (v, ops)) : [> tag ty] r) =
-  let module X = (val (Resource.get ops Pi.Process)) in
+  let module X = (val (Resource.get ops Pi.Process.pi)) in
   X.await v
 
 let await_exn ?(is_success = Int.equal 0) proc =
@@ -113,17 +127,17 @@ let await_exn ?(is_success = Int.equal 0) proc =
 
 let pid (type tag) (t : [> tag ty] r) =
   let (Resource.T (v, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Process)) in
+  let module X = (val (Resource.get ops Pi.Process.pi)) in
   X.pid v
 
 let signal (type tag) (t : [> tag ty] r) s =
   let (Resource.T (v, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Process)) in
+  let module X = (val (Resource.get ops Pi.Process.pi)) in
   X.signal v s
 
 let spawn (type tag) ~sw (t : [> tag mgr_ty] r) ?cwd ?stdin ?stdout ?stderr ?env ?executable args : tag ty r =
   let (Resource.T (v, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Mgr)) in
+  let module X = (val (Resource.get ops Pi.Mgr.pi)) in
   X.spawn v ~sw
     ?cwd:(cwd :> Fs.dir_ty Path.t option)
     ?env
@@ -142,7 +156,7 @@ let run t ?cwd ?stdin ?stdout ?stderr ?(is_success = Int.equal 0) ?env ?executab
     raise (Exn.add_context ex "running command: %a" pp_args args)
 
 let pipe (type tag) ~sw ((Resource.T (v, ops)) : [> tag mgr_ty] r) =
-  let module X = (val (Resource.get ops Pi.Mgr)) in
+  let module X = (val (Resource.get ops Pi.Mgr.pi)) in
   X.pipe v ~sw
 
 let parse_out (type tag) (t : [> tag mgr_ty] r) parse ?cwd ?stdin ?stderr ?is_success ?env ?executable args =

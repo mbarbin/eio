@@ -9,8 +9,9 @@ module type STREAM_SOCKET = sig
   val fd : t -> Fd.t
 end
 
-type (_, _, _) Eio.Resource.pi +=
-  | Stream_socket : ('t, (module STREAM_SOCKET with type t = 't), [> `Platform of [> `Unix] | `Socket | `Stream]) Eio.Resource.pi
+module Stream_socket : sig
+  val pi : ('t, (module STREAM_SOCKET with type t = 't), [> `Platform of [> `Unix] | `Socket | `Stream]) Eio.Resource.pi
+end
 
 module type FLOW = sig
   include Eio.File.Pi.WRITE

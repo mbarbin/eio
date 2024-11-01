@@ -106,7 +106,7 @@ module Impl = struct
     | Some src -> fast_copy_try_splice src t
     | None ->
       let Eio.Resource.T (src, ops) = src in
-      let module Src = (val (Eio.Resource.get ops Eio.Flow.Pi.Source)) in
+      let module Src = (val (Eio.Resource.get ops Eio.Flow.Pi.Source.pi)) in
       let rec aux = function
         | Eio.Flow.Read_source_buffer rsb :: _ -> copy_with_rsb (rsb src) t
         | _ :: xs -> aux xs

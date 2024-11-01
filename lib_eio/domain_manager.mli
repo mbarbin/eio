@@ -30,8 +30,9 @@ module Pi : sig
     val run_raw : t -> (unit -> 'a) -> 'a
   end
 
-  type (_, _, _) Resource.pi +=
-    | Mgr : ('t, (module MGR with type t = 't), [> ty]) Resource.pi
+  module Mgr : sig
+    val pi : ('t, (module MGR with type t = 't), [> ty]) Resource.pi
+  end
 
   val mgr : (module MGR with type t = 't) -> ('t, ty) Resource.handler
 end

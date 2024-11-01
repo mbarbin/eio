@@ -13,23 +13,30 @@ module Pi = struct
     val sleep_until : t -> time -> unit
   end
 
-  type (_, _, _) Resource.pi +=
-    | Clock : ('t, (module CLOCK with type t = 't and type time = 'time), [> 'time clock_ty]) Resource.pi
+  module Clock : sig
+    val pi : ('t, (module CLOCK with type t = 't and type time = 'time), [> 'time clock_ty]) Resource.pi
+  end = struct
+    module P = Resource.Pi.Create (struct
+      type 'a iface = (module CLOCK with type t = 'a)
+    end)
+    (* CR mbarbin: Doesn't work. *)
+    let pi = Obj.magic P.pi
+end
 
   let clock (type t time) (module X : CLOCK with type t = t and type time = time) =
-    Resource.handler [ H (Clock, (module X)) ]
+    Resource.handler [ H (Clock.pi, (module X)) ]
 end
 
 type 'a clock = ([> float clock_ty] as 'a) r
 
 let now (type time) (t : [> time clock_ty] r) =
   let Resource.T (t, ops) = t in
-  let module X = (val (Resource.get ops Pi.Clock)) in
+  let module X = (val (Resource.get ops Pi.Clock.pi)) in
   X.now t
 
 let sleep_until (type time) (t : [> time clock_ty] r) time =
   let Resource.T (t, ops) = t in
-  let module X = (val (Resource.get ops Pi.Clock)) in
+  let module X = (val (Resource.get ops Pi.Clock.pi)) in
   X.sleep_until t time
 
 let sleep t d = sleep_until t (now t +. d)

@@ -157,8 +157,9 @@ module Pi : sig
     val signal : t -> int -> unit
   end
 
-  type (_, _, _) Resource.pi +=
-    | Process : ('t, (module PROCESS with type t = 't and type tag = 'tag), [> 'tag ty]) Resource.pi
+  module Process : sig
+    val pi : ('t, (module PROCESS with type t = 't and type tag = 'tag), [> 'tag ty]) Resource.pi
+  end
 
   val process :
     (module PROCESS with type t = 't and type tag = 'tag) ->
@@ -186,8 +187,9 @@ module Pi : sig
       tag ty r
   end
 
-  type (_, _, _) Resource.pi +=
-    | Mgr : ('t, (module MGR with type t = 't and type tag = 'tag), [> 'tag mgr_ty]) Resource.pi
+  module Mgr : sig
+    val pi : ('t, (module MGR with type t = 't and type tag = 'tag), [> 'tag mgr_ty]) Resource.pi
+  end
 
   val mgr :
     (module MGR with type t = 't and type tag = 'tag) ->

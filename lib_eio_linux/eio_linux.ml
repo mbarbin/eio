@@ -31,10 +31,14 @@ module Low_level = Low_level
 
 (* When renaming, we get a plain [Eio.Fs.dir]. We need extra access to check
    that the new location is within its sandbox. *)
-type ('t, _, _) Eio.Resource.pi += Dir_fd : ('t, 't -> Low_level.dir_fd, [> `Dir_fd]) Eio.Resource.pi
+module Dir_fd : sig
+  val pi : ('t, 't -> Low_level.dir_fd, [> `Dir_fd]) Eio.Resource.pi
+end = Eio.Resource.Pi.Create (struct
+  type 't iface = 't -> Low_level.dir_fd
+end)
 
 let get_dir_fd_opt (Eio.Resource.T (t, ops)) =
-  match Eio.Resource.get_opt ops Dir_fd with
+  match Eio.Resource.get_opt ops Dir_fd.pi with
   | Some f -> Some (f t)
   | None -> None
 
@@ -466,9 +470,9 @@ and Dir_handler : sig
   val v : (Dir.t, [`Dir | `Close]) Eio.Resource.handler
 end = struct
   let v = Eio.Resource.handler [
-      H (Eio.Fs.Pi.Dir, (module Dir));
-      H (Eio.Resource.Close, Dir.close);
-      H (Dir_fd, Dir.fd);
+      H (Eio.Fs.Pi.Dir.pi, (module Dir));
+      H (Eio.Resource.Close.pi, Dir.close);
+      H (Dir_fd.pi, Dir.fd);
     ]
 end
 

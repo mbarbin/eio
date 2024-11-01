@@ -131,9 +131,13 @@ module Pi : sig
     val truncate : t -> Optint.Int63.t -> unit
   end
 
-  type (_, _, _) Resource.pi +=
-    | Read : ('t, (module READ with type t = 't), [> ro_ty]) Resource.pi
-    | Write : ('t, (module WRITE with type t = 't), [> rw_ty]) Resource.pi
+  module Read : sig
+    val pi : ('t, (module READ with type t = 't), [> ro_ty]) Resource.pi
+  end
+
+  module Write : sig
+    val pi : ('t, (module WRITE with type t = 't), [> rw_ty]) Resource.pi
+  end
 
   val ro : (module READ with type t = 't) -> ('t, ro_ty) Resource.handler
 

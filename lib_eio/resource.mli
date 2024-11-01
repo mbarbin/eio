@@ -37,7 +37,7 @@ type -'tags t = T : ('t * ('t, 'tags) handler) -> 'tags t (** *)
     - A module to let providers implement the interface (e.g. {!Flow.Pi}).
 *)
 
-type ('t, 'iface, 'tag) pi = ..
+type ('t, 'iface, 'tag) pi
 (** A provider interface describes an interface that a resource can implement.
 
     - ['t] is the type of the resource itself.
@@ -50,6 +50,28 @@ type ('t, 'iface, 'tag) pi = ..
     Often, the API requested will be a module type, but it can be a single function
     as in this example.
 *)
+
+module Pi : sig
+  module Create (X : sig
+      type 'a iface
+    end) : sig
+    val pi : ('a, 'a X.iface, _) pi
+  end
+
+  module Create1 (X : sig
+      type (!'a, 'b) t
+      type 'a iface
+    end) : sig
+    val pi : (('a, 'b) X.t, 'a X.iface, _) pi
+  end
+
+  module Create2 (X : sig
+      type (!'a, !'b, 'c) t
+      type ('a, 'b) iface
+    end) : sig
+    val pi : (('a, 'b, 'c) X.t, ('a, 'b) X.iface, _) pi
+  end
+end
 
 type _ binding = H : ('t, 'impl, 'tags) pi * 'impl -> 't binding (** *)
 (** A binding [H (pi, impl)] says to use [impl] to implement [pi].
@@ -101,7 +123,10 @@ val get_opt : ('t, _) handler -> ('t, 'impl, _) pi -> 'impl option
     finishes. However, it can be useful to close them sooner in some cases. *)
 
 type close_ty = [`Close]
-type (_, _, _) pi += Close : ('t, 't -> unit, [> close_ty]) pi
+
+module Close : sig
+  val pi : ('t, 't -> unit, [> close_ty]) pi
+end
 
 val close : [> close_ty] t -> unit
 (** [close t] marks the resource as closed. It can no longer be used after this.

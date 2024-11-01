@@ -19,7 +19,9 @@ module Resource : sig
   type 'a t = ([> `Unix_fd] as 'a) Eio.Resource.t
   (** Resources that have FDs are tagged with [`Unix_fd]. *)
 
-  type ('t, _, _) Eio.Resource.pi += T : ('t, 't -> Fd.t, [> `Unix_fd]) Eio.Resource.pi
+  module T : sig
+    val pi : ('t, 't -> Fd.t, [> `Unix_fd]) Eio.Resource.pi
+  end
 
   val fd : _ t -> Fd.t
   (** [fd t] returns the FD being wrapped by a resource. *)

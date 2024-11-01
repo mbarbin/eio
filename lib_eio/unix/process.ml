@@ -90,13 +90,16 @@ module Pi = struct
       ty r
   end
 
-  type (_, _, _) Eio.Resource.pi +=
-    | Mgr_unix : ('t, (module MGR with type t = 't), [> mgr_ty]) Eio.Resource.pi
+  module Mgr_unix : sig
+    val pi : ('t, (module MGR with type t = 't), [> mgr_ty]) Eio.Resource.pi
+  end = Eio.Resource.Pi.Create (struct
+    type 't iface = (module MGR with type t = 't)
+  end)
 
   let mgr_unix (type t tag) (module X : MGR with type t = t and type tag = tag) =
     Eio.Resource.handler [
-      H (Eio.Process.Pi.Mgr, (module X));
-      H (Mgr_unix, (module X));
+      H (Eio.Process.Pi.Mgr.pi, (module X));
+      H (Mgr_unix.pi, (module X));
     ]
 end
 
@@ -139,7 +142,7 @@ end) = struct
 end
 
 let spawn_unix ~sw (Eio.Resource.T (v, ops)) ?cwd ~fds ?env ?executable args =
-  let module X = (val (Eio.Resource.get ops Pi.Mgr_unix)) in
+  let module X = (val (Eio.Resource.get ops Pi.Mgr_unix.pi)) in
   let executable = get_executable executable ~args in
   let env = get_env env in
   X.spawn_unix v ~sw ?cwd ~fds ~env ~executable args

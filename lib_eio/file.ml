@@ -85,39 +85,43 @@ module Pi = struct
     val truncate : t -> Optint.Int63.t -> unit
   end
 
-  type (_, _, _) Resource.pi +=
-    | Read : ('t, (module READ with type t = 't), [> ro_ty]) Resource.pi
-    | Write : ('t, (module WRITE with type t = 't), [> rw_ty]) Resource.pi
+  module Read : sig
+    val pi : ('t, (module READ with type t = 't), [> ro_ty]) Resource.pi
+  end = Resource.Pi.Create (struct type 't iface = (module READ with type t = 't) end)
+
+  module Write : sig
+    val pi : ('t, (module WRITE with type t = 't), [> rw_ty]) Resource.pi
+  end = Resource.Pi.Create (struct type 't iface = (module WRITE with type t = 't) end)
 
   let ro (type t) (module X : READ with type t = t) =
     Resource.handler [
-      H (Flow.Pi.Source, (module X));
-      H (Read, (module X));
-      H (Resource.Close, X.close);
+      H (Flow.Pi.Source.pi, (module X));
+      H (Read.pi, (module X));
+      H (Resource.Close.pi, X.close);
     ]
 
   let rw (type t) (module X : WRITE with type t = t) =
     Resource.handler (
-      H (Flow.Pi.Sink, (module X)) ::
-      H (Write, (module X)) ::
+      H (Flow.Pi.Sink.pi, (module X)) ::
+      H (Write.pi, (module X)) ::
       Resource.bindings (ro (module X))
     )
 end
 
 let stat (Resource.T (t, ops)) =
-  let module X = (val (Resource.get ops Pi.Read)) in
+  let module X = (val (Resource.get ops Pi.Read.pi)) in
   X.stat t
 
 let size t = (stat t).size
 
 let pread (Resource.T (t, ops)) ~file_offset bufs =
-  let module X = (val (Resource.get ops Pi.Read)) in
+  let module X = (val (Resource.get ops Pi.Read.pi)) in
   let got = X.pread t ~file_offset bufs in
   assert (got > 0 && got <= Cstruct.lenv bufs);
   got
 
 let pread_exact (Resource.T (t, ops)) ~file_offset bufs =
-  let module X = (val (Resource.get ops Pi.Read)) in
+  let module X = (val (Resource.get ops Pi.Read.pi)) in
   let rec aux ~file_offset bufs =
     if Cstruct.lenv bufs > 0 then (
       let got = X.pread t ~file_offset bufs in
@@ -128,13 +132,13 @@ let pread_exact (Resource.T (t, ops)) ~file_offset bufs =
   aux ~file_offset bufs
 
 let pwrite_single (Resource.T (t, ops)) ~file_offset bufs =
-  let module X = (val (Resource.get ops Pi.Write)) in
+  let module X = (val (Resource.get ops Pi.Write.pi)) in
   let got = X.pwrite t ~file_offset bufs in
   assert (got > 0 && got <= Cstruct.lenv bufs);
   got
 
 let pwrite_all (Resource.T (t, ops)) ~file_offset bufs =
-  let module X = (val (Resource.get ops Pi.Write)) in
+  let module X = (val (Resource.get ops Pi.Write.pi)) in
   let rec aux ~file_offset bufs =
     if Cstruct.lenv bufs > 0 then (
       let got = X.pwrite t ~file_offset bufs in
@@ -145,13 +149,13 @@ let pwrite_all (Resource.T (t, ops)) ~file_offset bufs =
   aux ~file_offset bufs
 
 let seek (Resource.T (t, ops)) off cmd =
-  let module X = (val (Resource.get ops Pi.Read)) in
+  let module X = (val (Resource.get ops Pi.Read.pi)) in
   X.seek t off cmd
 
 let sync (Resource.T (t, ops)) =
-  let module X = (val (Resource.get ops Pi.Write)) in
+  let module X = (val (Resource.get ops Pi.Write.pi)) in
   X.sync t
 
 let truncate (Resource.T (t, ops)) len =
-  let module X = (val (Resource.get ops Pi.Write)) in
+  let module X = (val (Resource.get ops Pi.Write.pi)) in
   X.truncate t len

@@ -27,8 +27,9 @@ module Pi : sig
       ty r
   end
 
-  type (_, _, _) Eio.Resource.pi +=
-    | Mgr_unix : ('t, (module MGR with type t = 't), [> mgr_ty]) Eio.Resource.pi
+  module Mgr_unix : sig
+    val pi : ('t, (module MGR with type t = 't), [> mgr_ty]) Eio.Resource.pi
+  end
 
   val mgr_unix :
     (module MGR with type t = 't and type tag = 'tag) ->

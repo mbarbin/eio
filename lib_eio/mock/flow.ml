@@ -87,7 +87,7 @@ module Mock_flow = struct
     | `Read_into -> copy_via_buffer t src
     | `Read_source_buffer ->
       let Eio.Resource.T (src, ops) = src in
-      let module Src = (val (Eio.Resource.get ops Eio.Flow.Pi.Source)) in
+      let module Src = (val (Eio.Resource.get ops Eio.Flow.Pi.Source.pi)) in
       let try_rsb = function
         | Eio.Flow.Read_source_buffer rsb -> copy_rsb t (rsb src); true
         | _ -> false
@@ -123,8 +123,13 @@ type ty = [`Generic | `Mock] Eio.Net.stream_socket_ty
 
 type t = ty r
 
-type (_, _, _) Eio.Resource.pi += Type : ('t, 't -> Mock_flow.t, ty) Eio.Resource.pi
-let raw (Eio.Resource.T (t, ops)) = Eio.Resource.get ops Type t
+module Type : sig
+  val pi : ('t, 't -> Mock_flow.t, ty) Eio.Resource.pi
+end = Eio.Resource.Pi.Create (struct
+  type 't iface = 't -> Mock_flow.t
+end)
+
+let raw (Eio.Resource.T (t, ops)) = Eio.Resource.get ops Type.pi t
 
 let attach_to_switch t sw =
   let t = raw t in
@@ -136,7 +141,7 @@ let on_copy_bytes t = Handler.seq (raw t).on_copy_bytes
 let set_copy_method t v = (raw t).copy_method <- v
 
 let handler = Eio.Resource.handler (
-    H (Type, Fun.id) ::
+    H (Type.pi, Fun.id) ::
     Eio.Resource.bindings (Eio.Net.Pi.stream_socket (module Mock_flow))
   )
 

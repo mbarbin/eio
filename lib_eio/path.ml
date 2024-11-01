@@ -19,12 +19,12 @@ let ( / ) (dir, p1) p2 =
   | p1, p2 -> (dir, concat p1 p2)
 
 let pp f (Resource.T (t, ops), p) =
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   if p = "" then Fmt.pf f "<%a>" X.pp t
   else Fmt.pf f "<%a:%s>" X.pp t (String.escaped p)
 
 let native (Resource.T (t, ops), p) =
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   X.native t p
 
 let native_exn t =
@@ -66,7 +66,7 @@ let split (dir, p) =
 
 let open_in ~sw t =
   let (Resource.T (dir, ops), path) = t in
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   try X.open_in dir ~sw path
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
@@ -74,7 +74,7 @@ let open_in ~sw t =
 
 let open_out ~sw ?(append=false) ~create t =
   let (Resource.T (dir, ops), path) = t in
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   try X.open_out dir ~sw ~append ~create path
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
@@ -82,7 +82,7 @@ let open_out ~sw ?(append=false) ~create t =
 
 let open_dir ~sw t =
   let (Resource.T (dir, ops), path) = t in
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   try
     let sub = X.open_dir dir ~sw path, "" in
     (sub : [`Close | `Dir] t :> [< `Close | `Dir] t)
@@ -92,7 +92,7 @@ let open_dir ~sw t =
 
 let mkdir ~perm t =
   let (Resource.T (dir, ops), path) = t in
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   try X.mkdir dir ~perm path
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
@@ -100,7 +100,7 @@ let mkdir ~perm t =
 
 let read_dir t =
   let (Resource.T (dir, ops), path) = t in
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   try List.sort String.compare (X.read_dir dir path)
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
@@ -108,7 +108,7 @@ let read_dir t =
 
 let stat ~follow t =
   let (Resource.T (dir, ops), path) = t in
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   try X.stat ~follow dir path
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
@@ -162,7 +162,7 @@ let save ?append ~create path data =
 
 let unlink t =
   let (Resource.T (dir, ops), path) = t in
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   try X.unlink dir path
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
@@ -170,7 +170,7 @@ let unlink t =
 
 let rmdir t =
   let (Resource.T (dir, ops), path) = t in
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   try X.rmdir dir path
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
@@ -204,7 +204,7 @@ let rmtree ?(missing_ok=false) t =
 let rename t1 t2 =
   let (dir2, new_path) = t2 in
   let (Resource.T (dir, ops), old_path) = t1 in
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   try X.rename dir old_path (dir2 :> _ Fs.dir) new_path
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
@@ -212,7 +212,7 @@ let rename t1 t2 =
 
 let symlink ~link_to source =
   let (Resource.T (dir, ops), path) = source in
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   try X.symlink dir path ~link_to
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
@@ -233,7 +233,7 @@ let rec mkdirs ?(exists_ok=false) ~perm t =
 
 let read_link t =
   let (Resource.T (dir, ops), path) = t in
-  let module X = (val (Resource.get ops Fs.Pi.Dir)) in
+  let module X = (val (Resource.get ops Fs.Pi.Dir.pi)) in
   try X.read_link dir path
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in

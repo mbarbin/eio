@@ -86,13 +86,18 @@ module Make(T : TIME) : S with type time := T.t = struct
       | None -> false
       | Some (_, v) -> set_time t v.time; true
 
-    type (_, _, _) Eio.Resource.pi += Raw : ('t, 't -> t, T.t ty) Eio.Resource.pi
-    let raw (Eio.Resource.T (t, ops)) = Eio.Resource.get ops Raw t
+    module Raw : sig
+      val pi : ('t, 't -> t, T.t ty) Eio.Resource.pi
+    end = Eio.Resource.Pi.Create (struct
+      type 't iface = 't -> t
+    end)
+
+    let raw (Eio.Resource.T (t, ops)) = Eio.Resource.get ops Raw.pi t
   end
 
   let handler =
     Eio.Resource.handler (
-      H (Impl.Raw, Fun.id) ::
+      H (Impl.Raw.pi, Fun.id) ::
       Eio.Resource.bindings (Eio.Time.Pi.clock (module Impl));
     )
 

@@ -25,10 +25,14 @@ module Fd = Eio_unix.Fd
 
 (* When renaming, we get a plain [Eio.Fs.dir]. We need extra access to check
    that the new location is within its sandbox. *)
-type (_, _, _) Eio.Resource.pi += Posix_dir : ('t, 't -> Low_level.dir_fd, [> `Posix_dir]) Eio.Resource.pi
+module Posix_dir : sig
+  val pi : ('t, 't -> Low_level.dir_fd, [> `Posix_dir]) Eio.Resource.pi
+end = Eio.Resource.Pi.Create (struct
+    type 't iface = 't -> Low_level.dir_fd
+end)
 
 let as_posix_dir (Eio.Resource.T (t, ops)) =
-  match Eio.Resource.get_opt ops Posix_dir with
+  match Eio.Resource.get_opt ops Posix_dir.pi with
   | None -> None
   | Some fn -> Some (fn t)
 
@@ -126,8 +130,8 @@ and Handler : sig
   val v : (Dir.t, [`Dir | `Close]) Eio.Resource.handler
 end = struct
   let v = Eio.Resource.handler [
-      H (Eio.Fs.Pi.Dir, (module Dir));
-      H (Posix_dir, Dir.fd);
+      H (Eio.Fs.Pi.Dir.pi, (module Dir));
+      H (Posix_dir.pi, Dir.fd);
     ]
 end
 

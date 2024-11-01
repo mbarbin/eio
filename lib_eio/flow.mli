@@ -147,10 +147,17 @@ module Pi : sig
 
   val two_way : (module TWO_WAY with type t = 't) -> ('t, two_way_ty) Resource.handler
 
-  type (_, _, _) Resource.pi +=
-    | Source : ('t, (module SOURCE with type t = 't), [> source_ty]) Resource.pi
-    | Sink : ('t, (module SINK with type t = 't), [> sink_ty]) Resource.pi
-    | Shutdown : ('t, (module SHUTDOWN with type t = 't), [> shutdown_ty]) Resource.pi
+  module Source : sig
+    val pi : ('t, (module SOURCE with type t = 't), [> source_ty]) Resource.pi
+  end
+
+  module Sink : sig
+    val pi : ('t, (module SINK with type t = 't), [> sink_ty]) Resource.pi
+  end
+
+  module Shutdown : sig
+    val pi : ('t, (module SHUTDOWN with type t = 't), [> shutdown_ty]) Resource.pi
+  end
 
   val simple_copy : single_write:('t -> Cstruct.t list -> int) -> 't -> src:_ source -> unit
   (** [simple_copy ~single_write] implements {!SINK}'s [copy] API using [single_write]. *)

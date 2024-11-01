@@ -31,7 +31,7 @@ let sockaddr_of_unix_datagram = function
     `Udp (host, port)
 
 let send_msg (Eio.Resource.T (t, ops)) ?(fds=[]) bufs =
-  let module X = (val (Eio.Resource.get ops Pi.Stream_socket)) in
+  let module X = (val (Eio.Resource.get ops Pi.Stream_socket.pi)) in
   let rec aux ~fds bufs =
     let sent = X.send_msg t ~fds bufs in
     match Cstruct.shiftv bufs sent with
@@ -41,7 +41,7 @@ let send_msg (Eio.Resource.T (t, ops)) ?(fds=[]) bufs =
   aux ~fds bufs
 
 let recv_msg_with_fds (Eio.Resource.T (t, ops)) ~sw ~max_fds bufs =
-  let module X = (val (Eio.Resource.get ops Pi.Stream_socket)) in
+  let module X = (val (Eio.Resource.get ops Pi.Stream_socket.pi)) in
   X.recv_msg_with_fds t ~sw ~max_fds bufs
 
 let getnameinfo (sockaddr : Eio.Net.Sockaddr.t) =

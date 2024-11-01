@@ -60,14 +60,18 @@ module Impl = struct
     traceln "%s: getnameinfo %a" t.label Eio.Net.Sockaddr.pp sockaddr;
     Handler.run t.on_getnameinfo
 
-  type (_, _, _) Eio.Resource.pi += Raw : ('t, 't -> t, ty) Eio.Resource.pi
-  let raw (Eio.Resource.T (t, ops)) = Eio.Resource.get ops Raw t
+  module Raw : sig
+    val pi : ('t, 't -> t, ty) Eio.Resource.pi
+  end = Eio.Resource.Pi.Create (struct
+    type 't iface = 't -> t
+  end)
+  let raw (Eio.Resource.T (t, ops)) = Eio.Resource.get ops Raw.pi t
 end
 
 let make : string -> t =
   let super = Eio.Net.Pi.network (module Impl) in
   let handler = Eio.Resource.handler (
-      H (Impl.Raw, Fun.id) ::
+      H (Impl.Raw.pi, Fun.id) ::
       Eio.Resource.bindings super
     ) in
   fun label -> Eio.Resource.T (Impl.make label, handler)
@@ -123,14 +127,19 @@ module Listening_socket = struct
 
   let listening_addr { listening_addr; _ } = listening_addr
 
-  type (_, _, _) Eio.Resource.pi += Type : ('t, 't -> t, listening_socket_ty) Eio.Resource.pi
-  let raw (Eio.Resource.T (t, ops)) = Eio.Resource.get ops Type t
+  module Type : sig
+    val pi : ('t, 't -> t, listening_socket_ty) Eio.Resource.pi
+  end = Eio.Resource.Pi.Create (struct
+    type 't iface = 't -> t
+  end)
+
+  let raw (Eio.Resource.T (t, ops)) = Eio.Resource.get ops Type.pi t
 end
 
 let listening_socket_handler =
   Eio.Resource.handler @@
   Eio.Resource.bindings (Eio.Net.Pi.listening_socket (module Listening_socket)) @ [
-    H (Listening_socket.Type, Fun.id);
+    H (Listening_socket.Type.pi, Fun.id);
   ]
 
 let listening_socket ?listening_addr label : listening_socket =
