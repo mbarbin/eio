@@ -23,6 +23,16 @@ module Pi = struct
 
     let clock (type t) (module X : CLOCK with type t = t and type time = X.time) =
       Resource.handler [ H (Clock.pi, (module X)) ]
+
+    let now (t : [> X.time clock_ty] r) =
+      let Resource.T (t, ops) = t in
+      let module X = (val (Resource.get ops Clock.pi)) in
+      X.now t
+
+    let sleep_until (t : [> X.time clock_ty] r) time =
+      let Resource.T (t, ops) = t in
+      let module X = (val (Resource.get ops Clock.pi)) in
+      X.sleep_until t time
   end
 
   module Float = Make (struct type time = float end)
@@ -31,15 +41,8 @@ end
 
 type 'a clock = ([> float clock_ty] as 'a) r
 
-let now (t : [> float clock_ty] r) =
-  let Resource.T (t, ops) = t in
-  let module X = (val (Resource.get ops Pi.Float.Clock.pi)) in
-  X.now t
-
-let sleep_until (t : [> float clock_ty] r) time =
-  let Resource.T (t, ops) = t in
-  let module X = (val (Resource.get ops Pi.Float.Clock.pi)) in
-  X.sleep_until t time
+let now = Pi.Float.now
+let sleep_until = Pi.Float.sleep_until
 
 let sleep t d = sleep_until t (now t +. d)
 
@@ -47,15 +50,8 @@ module Mono = struct
   type ty = Mtime.t clock_ty
   type 'a t = ([> ty] as 'a) r
 
-  let now (t : [> ty] r) =
-    let Resource.T (t, ops) = t in
-    let module X = (val (Resource.get ops Pi.Mtime.Clock.pi)) in
-    X.now t
-
-  let sleep_until (t : [> ty] r) time =
-    let Resource.T (t, ops) = t in
-    let module X = (val (Resource.get ops Pi.Mtime.Clock.pi)) in
-    X.sleep_until t time
+  let now = Pi.Mtime.now
+  let sleep_until = Pi.Mtime.sleep_until
 
   let sleep_span t span =
     match Mtime.add_span (now t) span with
