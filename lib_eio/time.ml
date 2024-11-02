@@ -13,30 +13,32 @@ module Pi = struct
     val sleep_until : t -> time -> unit
   end
 
-  module Clock : sig
-    val pi : ('t, (module CLOCK with type t = 't and type time = 'time), [> 'time clock_ty]) Resource.pi
-  end = struct
-    module P = Resource.Pi.Create (struct
-      type 'a iface = (module CLOCK with type t = 'a)
-    end)
-    (* CR mbarbin: Doesn't work. *)
-    let pi = Obj.magic P.pi
-end
+  module Make (X : sig type time end) = struct
 
-  let clock (type t time) (module X : CLOCK with type t = t and type time = time) =
-    Resource.handler [ H (Clock.pi, (module X)) ]
+    module Clock : sig
+      val pi : ('t, (module CLOCK with type t = 't and type time = X.time), [> X.time clock_ty]) Resource.pi
+    end = Resource.Pi.Create (struct
+        type 'a iface = (module CLOCK with type t = 'a and type time = X.time)
+      end)
+
+    let clock (type t) (module X : CLOCK with type t = t and type time = X.time) =
+      Resource.handler [ H (Clock.pi, (module X)) ]
+  end
+
+  module Float = Make (struct type time = float end)
+  module Mtime = Make (struct type time = Mtime.t end)
 end
 
 type 'a clock = ([> float clock_ty] as 'a) r
 
-let now (type time) (t : [> time clock_ty] r) =
+let now (t : [> float clock_ty] r) =
   let Resource.T (t, ops) = t in
-  let module X = (val (Resource.get ops Pi.Clock.pi)) in
+  let module X = (val (Resource.get ops Pi.Float.Clock.pi)) in
   X.now t
 
-let sleep_until (type time) (t : [> time clock_ty] r) time =
+let sleep_until (t : [> float clock_ty] r) time =
   let Resource.T (t, ops) = t in
-  let module X = (val (Resource.get ops Pi.Clock.pi)) in
+  let module X = (val (Resource.get ops Pi.Float.Clock.pi)) in
   X.sleep_until t time
 
 let sleep t d = sleep_until t (now t +. d)
@@ -45,8 +47,15 @@ module Mono = struct
   type ty = Mtime.t clock_ty
   type 'a t = ([> ty] as 'a) r
 
-  let now = now
-  let sleep_until = sleep_until
+  let now (t : [> ty] r) =
+    let Resource.T (t, ops) = t in
+    let module X = (val (Resource.get ops Pi.Mtime.Clock.pi)) in
+    X.now t
+
+  let sleep_until (t : [> ty] r) time =
+    let Resource.T (t, ops) = t in
+    let module X = (val (Resource.get ops Pi.Mtime.Clock.pi)) in
+    X.sleep_until t time
 
   let sleep_span t span =
     match Mtime.add_span (now t) span with

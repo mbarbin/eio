@@ -87,12 +87,28 @@ module Pi : sig
     val sleep_until : t -> time -> unit
   end
 
-  module Clock : sig
-    val pi : ('t, (module CLOCK with type t = 't and type time = 'time),
-      [> 'time clock_ty ]) Resource.pi
+  module Make (X : sig type time end) : sig
+
+    module Clock : sig
+      val pi
+        : ('t, (module CLOCK with type t = 't and type time = X.time),
+           [> X.time clock_ty ]) Resource.pi
+    end
+
+    val clock
+      : (module CLOCK with type t = 't and type time = X.time) ->
+      ('t, [> X.time clock_ty]) Resource.handler
   end
 
-  val clock :
-    (module CLOCK with type t = 't and type time = 'time) ->
-    ('t, [> 'time clock_ty]) Resource.handler
+  module Float : sig
+    val clock
+    : (module CLOCK with type t = 't and type time = float) ->
+    ('t, [> float clock_ty]) Resource.handler
+  end
+
+  module Mtime : sig
+    val clock
+    : (module CLOCK with type t = 't and type time = Mtime.t) ->
+    ('t, [> Mtime.t clock_ty]) Resource.handler
+  end
 end

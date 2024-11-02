@@ -18,6 +18,11 @@ module type TIME = sig
   val zero : t
   val compare : t -> t -> int
   val pp : t Fmt.t
+
+  module Pi : sig
+    val clock : (module Eio.Time.Pi.CLOCK with type t = 't and type time = t) ->
+      ('t, [> t Eio.Time.clock_ty]) Eio.Resource.handler
+  end
 end
 
 module Make(T : TIME) : S with type time := T.t = struct
@@ -98,7 +103,7 @@ module Make(T : TIME) : S with type time := T.t = struct
   let handler =
     Eio.Resource.handler (
       H (Impl.Raw.pi, Fun.id) ::
-      Eio.Resource.bindings (Eio.Time.Pi.clock (module Impl));
+      Eio.Resource.bindings (T.Pi.clock (module Impl));
     )
 
   let make () =
@@ -118,6 +123,10 @@ module Old_time = struct
   let compare = Float.compare
   let pp f x = Fmt.pf f "%g" x
   let zero = 0.0
+
+  module Pi = struct
+    let clock = Eio.Time.Pi.Float.clock
+  end
 end
 
 module Mono_time = struct
@@ -128,6 +137,10 @@ module Mono_time = struct
   let pp f t =
     let s = Int64.to_float (Mtime.to_uint64_ns t) /. 1e9 in
     Fmt.pf f "%g" s
+
+  module Pi = struct
+    let clock = Eio.Time.Pi.Mtime.clock
+  end
 end
 
 module Mono = Make(Mono_time)
