@@ -144,11 +144,7 @@ val truncate : rw -> Optint.Int63.t -> unit
 (** {2 Provider Interface} *)
 
 module Pi : sig
-  val ro : (module READ with type t = 'a) ->
-    < read : (module READ with type t = 'a)
-    ; source : (module Flow.SOURCE with type t = 'a)
-    ; close : 'a -> unit
-    >
+  val ro : (module READ with type t = 'a) -> 'a -> ro
 
   val rw : (module WRITE with type t = 'a) ->
     < read : (module READ with type t = 'a)

@@ -98,13 +98,13 @@ module Rw = struct
 end
 
 module Pi = struct
-
-  let ro (type t) (module X : READ with type t = t) =
-    object
-      method source = (module X : Flow.SOURCE with type t = t)
-      method read = (module X : READ with type t = t)
-      method close = X.close
-    end
+  let ro (type t) (module X : READ with type t = t) (t : t) =
+    Ro
+      (t, object
+         method source = (module X : Flow.SOURCE with type t = t)
+         method read = (module X : READ with type t = t)
+         method close = X.close
+       end)
 
   let rw (type t) (module X : WRITE with type t = t) =
     object

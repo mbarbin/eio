@@ -179,6 +179,10 @@ type stream_socket =
       stream_socket
 [@@unboxed]
 
+module Stream_socket = struct
+  let close (Stream_socket (t, ops)) = ops#close t
+end
+
 module type LISTENING_SOCKET = sig
   type t
   type tag
@@ -242,56 +246,54 @@ type network =
 
 module Pi = struct
 
-  let stream_socket (type t tag) (module X : STREAM_SOCKET with type t = t and type tag = tag) =
-    Resource.handler @@
-    H (Resource.Close, X.close) ::
-    Resource.bindings (Flow.Pi.two_way (module X))
+  let stream_socket (type t) (module X : STREAM_SOCKET with type t = t) (t : t) =
+    Stream_socket
+      (t, object
+         method close = X.close
+         method shutdown = (module X : Flow.SHUTDOWN with type t = t)
+         method source = (module X : Flow.SOURCE with type t = t)
+         method sink = (module X : Flow.SINK with type t = t)
+       end)
 
-  type (_, _, _) Resource.pi +=
-    | Datagram_socket : ('t, (module DATAGRAM_SOCKET with type t = 't), [> _ datagram_socket_ty]) Resource.pi
+  let datagram_socket (type t) (module X : DATAGRAM_SOCKET with type t = t) (t : t) =
+    Datagram_socket
+      (t, object
+         method shutdown = (module X : Flow.SHUTDOWN with type t = t)
+         method datagram_socket = (module X : DATAGRAM_SOCKET with type t = t)
+         method close = X.close
+       end)
 
-  let datagram_socket (type t tag) (module X : DATAGRAM_SOCKET with type t = t and type tag = tag) =
-    Resource.handler @@
-    Resource.bindings (Flow.Pi.shutdown (module X)) @ [
-      H (Datagram_socket, (module X));
-      H (Resource.Close, X.close)
-    ]
+  let listening_socket (type t) (module X : LISTENING_SOCKET with type t = t) (t : t) =
+    Listening_socket
+      (t, object
+         method close = X.close
+         method listening_socket = (module X : LISTENING_SOCKET with type t = t)
+       end)
 
-  type (_, _, _) Resource.pi +=
-    | Listening_socket : ('t, (module LISTENING_SOCKET with type t = 't and type tag = 'tag), [> 'tag listening_socket_ty]) Resource.pi
-
-  let listening_socket (type t tag) (module X : LISTENING_SOCKET with type t = t and type tag = tag) =
-    Resource.handler [
-      H (Resource.Close, X.close);
-      H (Listening_socket, (module X))
-    ]
-
-  type (_, _, _) Resource.pi +=
-    | Network : ('t, (module NETWORK with type t = 't and type tag = 'tag), [> 'tag ty]) Resource.pi
-
-  let network (type t tag) (module X : NETWORK with type t = t and type tag = tag) =
-    Resource.handler [
-      H (Network, (module X));
-    ]
+  let network (type t) (module X : NETWORK with type t = t) (t : t) =
+    Network
+      (t, object
+         method network = (module X : NETWORK with type t = t)
+       end)
 end
 
-let accept ~sw (type tag) (Resource.T (t, ops) : [> tag listening_socket_ty] r) =
-  let module X = (val (Resource.get ops Pi.Listening_socket)) in
+let accept ~sw (type tag) (Listening_socket (t, ops)) =
+  let module X = (val ops#listening_socket) in
   X.accept t ~sw
 
-let accept_fork ~sw (t : [> 'a listening_socket_ty] r) ~on_error handle =
+let accept_fork ~sw (t : listening_socket) ~on_error handle =
   let child_started = ref false in
   let flow, addr = accept ~sw t in
-  Fun.protect ~finally:(fun () -> if !child_started = false then Flow.close flow)
+  Fun.protect ~finally:(fun () -> if !child_started = false then Stream_socket.close flow)
     (fun () ->
        Fiber.fork ~sw (fun () ->
-           match child_started := true; handle (flow :> 'a stream_socket_ty r) addr with
-           | x -> Flow.close flow; x
+           match child_started := true; handle flow addr with
+           | x -> Stream_socket.close flow; x
            | exception (Cancel.Cancelled _ as ex) ->
-             Flow.close flow;
+             Stream_socket.close flow;
              raise ex
            | exception ex ->
-             Flow.close flow;
+             Stream_socket.close flow;
              on_error (Exn.add_context ex "handling connection from %a" Sockaddr.pp addr)
          )
     )
