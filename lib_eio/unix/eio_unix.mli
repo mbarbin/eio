@@ -77,7 +77,7 @@ module Stdenv : sig
     stderr : Eio.Flow.sink;
     net : [`Unix | `Generic] Eio.Net.ty r;
     domain_mgr : Eio.Domain_manager.t;
-    process_mgr : Process.mgr_ty r;
+    process_mgr : Process.mgr;
     clock : float Eio.Time.clock_ty r;
     mono_clock : Eio.Time.Mono.ty r;
     fs : Eio.Path.t;

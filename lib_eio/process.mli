@@ -38,33 +38,67 @@ val pp_args : string list Fmt.t
 
 (** {2 Types} *)
 
-type 'tag ty = [ `Process | `Platform of 'tag ]
+module type PROCESS = sig
+  type t
+  type tag
 
-type 'a t = ([> [> `Generic] ty] as 'a) r
+  val pid : t -> int
+  val await : t -> exit_status
+  val signal : t -> int -> unit
+end
+
+type ('t, 'tag, 'row) process_ty =
+  < process : (module PROCESS with type t = 't and type tag = 'tag); .. > as 'row
+
+type t = Process : ('a * ('a, [> `Generic], _) process_ty) -> t [@@unboxed]
 (** A process. *)
 
-type 'tag mgr_ty = [ `Process_mgr | `Platform of 'tag ]
+type process := t
 
-type 'a mgr = 'a r
- constraint 'a = [> [> `Generic] mgr_ty]
+module type MGR = sig
+  type tag
+  type t
+
+  val pipe :
+    t ->
+    sw:Switch.t ->
+    [Flow.source_ty | Resource.close_ty] r * [Flow.sink_ty | Resource.close_ty] r
+
+  val spawn :
+    t ->
+    sw:Switch.t ->
+    ?cwd:Path.t ->
+    ?stdin:Flow.source ->
+    ?stdout:Flow.sink ->
+    ?stderr:Flow.sink ->
+    ?env:string array ->
+    ?executable:string ->
+    string list ->
+    process
+end
+
+type ('t, 'tag, 'row) mgr_ty =
+  < mgr : (module MGR with type t = 't and type tag = 'tag); .. > as 'row
+
+type mgr = Mgr : ('a * ('a, [> `Generic], _) mgr_ty) -> mgr [@@unboxed]
 (** A process manager capable of spawning new processes. *)
 
 (** {2 Processes} *)
 
-val pid : _ t -> int
+val pid : t -> int
 (** [pid t] is the process ID of [t]. *)
 
-val await : _ t  -> exit_status
+val await : t  -> exit_status
 (** [await t] waits for process [t] to exit and then reports the status. *)
 
-val await_exn : ?is_success:(int -> bool) -> _ t  -> unit
+val await_exn : ?is_success:(int -> bool) -> t  -> unit
 (** Like {! await} except an exception is raised if does not return a successful
     exit status.
 
     @param is_success Used to determine if an exit code is successful.
                       Default is [Int.equal 0]. *)
 
-val signal : _ t -> int -> unit
+val signal : t -> int -> unit
 (** [signal t i] sends the signal [i] to process [t].
 
     If the process has already exited then this does nothing
@@ -74,14 +108,14 @@ val signal : _ t -> int -> unit
 
 val spawn :
   sw:Switch.t ->
-  [> 'tag mgr_ty] r ->
+  mgr ->
   ?cwd:Path.t ->
   ?stdin:Flow.source ->
   ?stdout:Flow.sink ->
   ?stderr:Flow.sink ->
   ?env:string array ->
   ?executable:string ->
-  string list -> 'tag ty r
+  string list -> t
 (** [spawn ~sw mgr args] creates a new child process that is connected to the switch [sw].
 
     The child process will be sent {! Sys.sigkill} when the switch is released.
@@ -100,7 +134,7 @@ val spawn :
                       searching $PATH for it if necessary. *)
 
 val run :
-  _ mgr ->
+  mgr ->
   ?cwd:Path.t ->
   ?stdin:Flow.source ->
   ?stdout:Flow.sink ->
@@ -118,7 +152,7 @@ val run :
     Note: If [spawn] needed to create extra fibers to copy [stdin], etc, then it also waits for those to finish. *)
 
 val parse_out :
-  _ mgr ->
+  mgr ->
   'a Buf_read.parser ->
   ?cwd:Path.t ->
   ?stdin:Flow.source ->
@@ -140,7 +174,7 @@ val parse_out :
 
 (** {2 Pipes} *)
 
-val pipe : sw:Switch.t -> _ mgr -> [Flow.source_ty | Resource.close_ty] r * [Flow.sink_ty | Resource.close_ty] r
+val pipe : sw:Switch.t -> mgr -> [Flow.source_ty | Resource.close_ty] r * [Flow.sink_ty | Resource.close_ty] r
 (** [pipe ~sw mgr] creates a pipe backed by the OS.
 
     The flows can be used by {!spawn} without the need for extra fibers to copy the data.
@@ -148,48 +182,11 @@ val pipe : sw:Switch.t -> _ mgr -> [Flow.source_ty | Resource.close_ty] r * [Flo
 
 (** {2 Provider Interface} *)
 module Pi : sig
-  module type PROCESS = sig
-    type t
-    type tag
-
-    val pid : t -> int
-    val await : t -> exit_status
-    val signal : t -> int -> unit
-  end
-
-  type (_, _, _) Resource.pi +=
-    | Process : ('t, (module PROCESS with type t = 't and type tag = 'tag), [> 'tag ty]) Resource.pi
-
   val process :
     (module PROCESS with type t = 't and type tag = 'tag) ->
-    ('t, 'tag ty) Resource.handler
-
-  module type MGR = sig
-    type tag
-    type t
-
-    val pipe :
-      t ->
-      sw:Switch.t ->
-      [Flow.source_ty | Resource.close_ty] r * [Flow.sink_ty | Resource.close_ty] r
-
-    val spawn :
-      t ->
-      sw:Switch.t ->
-      ?cwd:Path.t ->
-      ?stdin:Flow.source ->
-      ?stdout:Flow.sink ->
-      ?stderr:Flow.sink ->
-      ?env:string array ->
-      ?executable:string ->
-      string list ->
-      tag ty r
-  end
-
-  type (_, _, _) Resource.pi +=
-    | Mgr : ('t, (module MGR with type t = 't and type tag = 'tag), [> 'tag mgr_ty]) Resource.pi
+    < process : (module PROCESS with type t = 't and type tag = 'tag) >
 
   val mgr :
     (module MGR with type t = 't and type tag = 'tag) ->
-    ('t, 'tag mgr_ty) Resource.handler
+    < mgr : (module MGR with type t = 't and type tag = 'tag) >
 end

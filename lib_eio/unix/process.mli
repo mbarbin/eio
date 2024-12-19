@@ -6,33 +6,44 @@ open Eio.Std
 
     These extend the types in {!Eio.Process} with support for file descriptors. *)
 
-type ty = [ `Generic | `Unix ] Eio.Process.ty
-type 'a t = ([> ty] as 'a) r
+type t = Process : ('a * ('a, [> `Generic | `Unix ], _) Eio.Process.process_ty) -> t [@@unboxed]
+type process := t
 
-type mgr_ty = [`Generic | `Unix] Eio.Process.mgr_ty
-type 'a mgr = ([> mgr_ty] as 'a) r
+module Process : sig
+  val to_generic : t -> Eio.Process.t
+end
+
+module type MGR_unix = sig
+  include Eio.Process.MGR
+
+  val spawn_unix :
+    t ->
+    sw:Switch.t ->
+    ?cwd:Eio.Path.t ->
+    env:string array ->
+    fds:(int * Fd.t * Fork_action.blocking) list ->
+    executable:string ->
+    string list ->
+    process
+end
+
+type ('t, 'tag, 'row) mgr_ty =
+  < mgr : (module Eio.Process.MGR with type t = 't and type tag = 'tag)
+  ; mgr_unix :  (module MGR_unix with type t = 't and type tag = 'tag)
+  ; .. > as 'row
+
+type mgr = Mgr : ('a * ('a, [> `Generic | `Unix ], _) mgr_ty) -> mgr [@@unboxed]
+
+module Mgr : sig
+  val to_generic : mgr -> Eio.Process.mgr
+end
 
 module Pi : sig
-  module type MGR = sig
-    include Eio.Process.Pi.MGR
-
-    val spawn_unix :
-      t ->
-      sw:Switch.t ->
-      ?cwd:Eio.Path.t ->
-      env:string array ->
-      fds:(int * Fd.t * Fork_action.blocking) list ->
-      executable:string ->
-      string list ->
-      ty r
-  end
-
-  type (_, _, _) Eio.Resource.pi +=
-    | Mgr_unix : ('t, (module MGR with type t = 't), [> mgr_ty]) Eio.Resource.pi
-
   val mgr_unix :
-    (module MGR with type t = 't and type tag = 'tag) ->
-    ('t, 'tag Eio.Process.mgr_ty) Eio.Resource.handler
+    (module MGR_unix with type t = 't and type tag = 'tag) ->
+    < mgr : (module Eio.Process.MGR with type t = 't and type tag = 'tag)
+    ; mgr_unix : (module MGR_unix with type t = 't and type tag = 'tag)
+    >
 end
 
 module Make_mgr (X : sig
@@ -46,18 +57,18 @@ module Make_mgr (X : sig
     fds:(int * Fd.t * Fork_action.blocking) list ->
     executable:string ->
     string list ->
-    ty r
-end) : Pi.MGR with type t = X.t and type tag = [`Generic | `Unix]
+    process
+end) : MGR_unix with type t = X.t and type tag = [`Generic | `Unix]
 
 val spawn_unix :
     sw:Switch.t ->
-    _ mgr ->
+    mgr ->
     ?cwd:Eio.Path.t ->
     fds:(int * Fd.t * Fork_action.blocking) list ->
     ?env:string array ->
     ?executable:string ->
     string list ->
-    ty r
+    process
 (** [spawn_unix ~sw mgr ~fds args] spawns a child process running the command [args].
 
     The arguments are as for {!Eio.Process.spawn},

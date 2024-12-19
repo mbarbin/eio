@@ -17,7 +17,7 @@ end
 
 let process =
   let handler = Eio.Process.Pi.process (module Process_impl) in
-  fun proc -> Eio.Resource.T (proc, handler)
+  fun proc -> Eio_unix.Process.Process (proc, handler)
 
 module Impl = struct
   module T = struct
@@ -45,6 +45,6 @@ module Impl = struct
   include Eio_unix.Process.Make_mgr (T)
 end
 
-let mgr : Eio_unix.Process.mgr_ty r =
+let mgr : Eio_unix.Process.mgr =
   let h = Eio_unix.Process.Pi.mgr_unix (module Impl) in
-  Eio.Resource.T ((), h)
+  Eio_unix.Process.Mgr ((), h)

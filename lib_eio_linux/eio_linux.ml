@@ -202,7 +202,7 @@ end
 
 let process =
   let handler = Eio.Process.Pi.process (module Process_impl) in
-  fun proc -> Eio.Resource.T (proc, handler)
+  fun proc -> Eio_unix.Process.Process (proc, handler)
 
 (* fchdir wants just a directory FD, not an FD and a path like the *at functions. *)
 let with_dir dir_fd path fn =
@@ -217,8 +217,8 @@ let with_dir dir_fd path fn =
 
 module Process_mgr = struct
   module T = struct
-    type t = unit 
-    
+    type t = unit
+
     let spawn_unix () ~sw ?cwd ~env ~fds ~executable args =
       let actions = Low_level.Process.Fork_action.[
           Eio_unix.Private.Fork_action.inherit_fds fds;
@@ -240,9 +240,9 @@ module Process_mgr = struct
   include Eio_unix.Process.Make_mgr (T)
 end
 
-let process_mgr : Eio_unix.Process.mgr_ty r =
+let process_mgr : Eio_unix.Process.mgr =
   let h = Eio_unix.Process.Pi.mgr_unix (module Process_mgr) in
-  Eio.Resource.T ((), h)
+  Eio_unix.Process.Mgr ((), h)
 
 let wrap_backtrace fn x =
   match fn x with
