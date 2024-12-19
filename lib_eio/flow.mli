@@ -17,11 +17,8 @@ module type SOURCE = sig
   val single_read : t -> Cstruct.t -> int
 end
 
-type source_ty = [`R | `Flow]
-type 'a source' = ([> source_ty] as 'a) r
+type source = Source : ('a * < source : (module SOURCE with type t = 'a); ..>) -> source [@@unboxed]
 (** A readable flow provides a stream of bytes. *)
-
-type source = Source : _ source' -> source [@@unboxed]
 
 module type SINK = sig
   type t
@@ -34,11 +31,8 @@ module type SINK = sig
         If you have no optimisations, you can use {!simple_copy} to implement this using {!single_write}. *)
 end
 
-type sink_ty = [`W | `Flow]
-type 'a sink' = ([> sink_ty] as 'a) r
+type sink = Sink : ('a * < sink : (module SINK with type t = 'a); ..>) -> sink [@@unboxed]
 (** A writeable flow accepts a stream of bytes. *)
-
-type sink = Sink : _ sink' -> sink [@@unboxed]
 
 type shutdown_command = [
   | `Receive  (** Indicate that no more reads will be done *)
@@ -51,8 +45,7 @@ module type SHUTDOWN = sig
   val shutdown : t -> shutdown_command -> unit
 end
 
-type shutdown_ty = [`Shutdown]
-type 'a shutdown = ([> shutdown_ty] as 'a) r
+type shutdown = Shutdown : ('a * < shutdown : (module SHUTDOWN with type t = 'a); ..>) -> shutdown [@@unboxed]
 
 module type TWO_WAY = sig
   include SHUTDOWN
@@ -124,9 +117,11 @@ val buffer_sink : Buffer.t -> sink
 
 (** {2 Bidirectional streams} *)
 
-type two_way_ty = [source_ty | sink_ty | shutdown_ty]
-type 'a two_way' = ([> two_way_ty] as 'a) r
-type two_way = Two_way : _ two_way' -> two_way [@@unboxed]
+type two_way = Two_way : ('a *
+ < source : (module SOURCE with type t = 'a)
+ ; sink : (module SINK with type t = 'a)
+ ; shutdown : (module SHUTDOWN with type t = 'a)
+ ; ..>) -> two_way [@@unboxed]
 
 val shutdown : two_way -> shutdown_command -> unit
 (** [shutdown t cmd] indicates that the caller has finished reading or writing [t]
@@ -143,18 +138,30 @@ val shutdown : two_way -> shutdown_command -> unit
 val close : [> `Close] r -> unit
 (** Alias of {!Resource.close}. *)
 
+module Closable : sig
+  type closable_source = Closable_source : ('a * < source : (module SOURCE with type t = 'a); close : 'a -> unit; ..>) -> closable_source [@@unboxed]
+  type closable_sink = Closable_sink : ('a * < sink : (module SINK with type t = 'a); close : 'a -> unit; ..>) -> closable_sink [@@unboxed]
+
+  val source : closable_source -> source
+  val sink : closable_sink -> sink
+end
+
+val close_source : Closable.closable_source -> unit
+(** [close_source src] closes the source. *)
+
+val close_sink : Closable.closable_sink -> unit
+(** [close_sink dst] closes the sink. *)
+
 (** {2 Provider Interface} *)
 
 module Pi : sig
-  val source : (module SOURCE with type t = 't) -> ('t, source_ty) Resource.handler
-  val sink : (module SINK with type t = 't) -> ('t, sink_ty) Resource.handler
-  val shutdown : (module SHUTDOWN with type t = 't) -> ('t, shutdown_ty) Resource.handler
-  val two_way : (module TWO_WAY with type t = 't) -> ('t, two_way_ty) Resource.handler
-
-  type (_, _, _) Resource.pi +=
-    | Source : ('t, (module SOURCE with type t = 't), [> source_ty]) Resource.pi
-    | Sink : ('t, (module SINK with type t = 't), [> sink_ty]) Resource.pi
-    | Shutdown : ('t, (module SHUTDOWN with type t = 't), [> shutdown_ty]) Resource.pi
+  val source : (module SOURCE with type t = 't) -> < source : (module SOURCE with type t = 't) >
+  val sink : (module SINK with type t = 't) -> < sink : (module SINK with type t = 't) >
+  val shutdown : (module SHUTDOWN with type t = 't) -> < shutdown : (module SHUTDOWN with type t = 't) >
+  val two_way : (module TWO_WAY with type t = 'a) ->
+    < source : (module SOURCE with type t = 'a)
+    ; sink : (module SINK with type t = 'a)
+    ; shutdown : (module SHUTDOWN with type t = 'a) >
 
   val simple_copy : single_write:('t -> Cstruct.t list -> int) -> 't -> src:source -> unit
   (** [simple_copy ~single_write] implements {!SINK}'s [copy] API using [single_write]. *)

@@ -74,7 +74,7 @@ let split (Path t) =
 let open_in ~sw t =
   let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
-  try File.Ro (X.open_in dir ~sw path)
+  try X.open_in dir ~sw path
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
     Exn.reraise_with_context ex bt "opening %a" pp t
@@ -82,7 +82,7 @@ let open_in ~sw t =
 let open_out ~sw ?(append=false) ~create t =
   let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
-  try File.Rw (X.open_out dir ~sw ~append ~create path)
+  try X.open_out dir ~sw ~append ~create path
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
     Exn.reraise_with_context ex bt "opening %a" pp t

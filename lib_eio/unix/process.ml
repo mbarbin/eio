@@ -104,7 +104,8 @@ end
 module Pi = struct
   let mgr_unix (type t tag) (module X : MGR_unix with type t = t and type tag = tag) =
     let o = Eio.Process.Pi.mgr (module X) in
-    object method mgr = o#mgr method mgr_unix = (module X : MGR_unix with type t = t and type tag = tag) end
+    let mgr = o#mgr in
+    object method mgr = mgr method mgr_unix = (module X : MGR_unix with type t = t and type tag = tag) end
 end
 
 module Make_mgr (X : sig

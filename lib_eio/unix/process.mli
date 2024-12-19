@@ -6,6 +6,13 @@ open Eio.Std
 
     These extend the types in {!Eio.Process} with support for file descriptors. *)
 
+(* CR mbarbin: Because we have now different constructors with
+   different method, I think we can actually completely remove the
+   [tag] part without losing anything. *)
+
+(* CR mbarbin: Consider systematically inlining the object definition
+   if possible, and get rid of all *_ty types definitions. *)
+
 type t = Process : ('a * ('a, [> `Generic | `Unix ], _) Eio.Process.process_ty) -> t [@@unboxed]
 type process := t
 
@@ -39,6 +46,9 @@ module Mgr : sig
 end
 
 module Pi : sig
+  (* CR mbarbin: In the [Pi] module, consider returning wrapped types
+     directly rather than the inner object. This may correspond better
+     to how it is used, and simplifies the interface a great deal. *)
   val mgr_unix :
     (module MGR_unix with type t = 't and type tag = 'tag) ->
     < mgr : (module Eio.Process.MGR with type t = 't and type tag = 'tag)

@@ -1,5 +1,3 @@
-open Std
-
 type shutdown_command = [ `Receive | `Send | `All ]
 
 type 't read_method = ..
@@ -11,9 +9,7 @@ module type SOURCE = sig
   val single_read : t -> Cstruct.t -> int
 end
 
-type source_ty = [`R | `Flow]
-type 'a source' = ([> source_ty] as 'a) r
-type source = Source : _ source' -> source [@@unboxed]
+type source = Source : ('a * < source : (module SOURCE with type t = 'a); ..>) -> source [@@unboxed]
 
 module type SINK = sig
   type t
@@ -21,17 +17,14 @@ module type SINK = sig
   val copy : t -> src:source -> unit
 end
 
-type sink_ty = [`W | `Flow]
-type 'a sink' = ([> sink_ty] as 'a) r
-type sink = Sink : _ sink' -> sink [@@unboxed]
+type sink = Sink : ('a * < sink : (module SINK with type t = 'a); ..>) -> sink [@@unboxed]
 
 module type SHUTDOWN = sig
   type t
   val shutdown : t -> shutdown_command -> unit
 end
 
-type shutdown_ty = [`Shutdown]
-type 'a shutdown = ([> shutdown_ty] as 'a) r
+type shutdown = Shutdown : ('a * < shutdown : (module SHUTDOWN with type t = 'a); ..>) -> shutdown [@@unboxed]
 
 module type TWO_WAY = sig
   include SHUTDOWN
@@ -40,35 +33,30 @@ module type TWO_WAY = sig
 end
 
 module Pi = struct
-  type (_, _, _) Resource.pi +=
-    | Source : ('t, (module SOURCE with type t = 't), [> source_ty]) Resource.pi
-    | Sink : ('t, (module SINK with type t = 't), [> sink_ty]) Resource.pi
-    | Shutdown : ('t, (module SHUTDOWN with type t = 't), [> shutdown_ty]) Resource.pi
-
   let source (type t) (module X : SOURCE with type t = t) =
-    Resource.handler [H (Source, (module X))]
+    object method source = (module X : SOURCE with type t = t) end
 
   let sink (type t) (module X : SINK with type t = t) =
-    Resource.handler [H (Sink, (module X))]
+    object method sink = (module X : SINK with type t = t) end
 
   let shutdown (type t) (module X : SHUTDOWN with type t = t) =
-    Resource.handler [ H (Shutdown, (module X))]
+    object method shutdown = (module X : SHUTDOWN with type t = t) end
 
   let two_way (type t) (module X : TWO_WAY with type t = t) =
-    Resource.handler [
-      H (Shutdown, (module X));
-      H (Source, (module X));
-      H (Sink, (module X));
-    ]
+    object
+      method shutdown = (module X : SHUTDOWN with type t = t)
+      method source = (module X : SOURCE with type t = t)
+      method sink = (module X : SINK with type t = t)
+    end
 
-  let simple_copy (type src) ~single_write t ~src:((Source (Resource.T (src, src_ops))) : source) =
+  let simple_copy (type src) ~single_write t ~src:(Source (src, src_ops)) =
     let rec write_all buf =
       if not (Cstruct.is_empty buf) then (
         let sent = single_write t [buf] in
         write_all (Cstruct.shift buf sent)
       )
     in
-    let module Src = (val (Resource.get src_ops Source)) in
+    let module Src = (val src_ops#source) in
     try
       let buf = Cstruct.create 4096 in
       while true do
@@ -78,12 +66,22 @@ module Pi = struct
     with End_of_file -> ()
 end
 
-open Pi
-
 let close = Resource.close
 
-let single_read (Source (Resource.T (t, ops)) : source) buf =
-  let module X = (val (Resource.get ops Source)) in
+module Closable = struct
+  type closable_source = Closable_source : ('a * < source : (module SOURCE with type t = 'a); close : 'a -> unit; ..>) -> closable_source [@@unboxed]
+  type closable_sink = Closable_sink : ('a * < sink : (module SINK with type t = 'a); close : 'a -> unit; ..>) -> closable_sink  [@@unboxed]
+
+  let source (Closable_source s) = Source s
+  let sink (Closable_sink s) = Sink s
+end
+
+let close_source (Closable.Closable_source (a, ops)) = ops#close a
+
+let close_sink (Closable.Closable_sink (a, ops)) = ops#close a
+
+let single_read (Source (t, ops)) buf =
+  let module X = (val ops#source) in
   let got = X.single_read t buf in
   assert (got > 0 && got <= Cstruct.length buf);
   got
@@ -123,7 +121,7 @@ end
 
 let cstruct_source =
   let ops = Pi.source (module Cstruct_source) in
-  fun data -> (Source (Resource.T (Cstruct_source.create data, ops)) : source)
+  fun data -> (Source ((Cstruct_source.create data, ops)) : source)
 
 module String_source = struct
   type t = {
@@ -145,14 +143,14 @@ end
 
 let string_source : string -> source =
   let ops = Pi.source (module String_source) in
-  fun s -> (Source (Resource.T (String_source.create s, ops)) : source)
+  fun s -> (Source (String_source.create s, ops))
 
-let single_write (Sink (Resource.T (t, ops)) : sink) bufs =
-  let module X = (val (Resource.get ops Sink)) in
+let single_write (Sink (t, ops)) bufs =
+  let module X = (val ops#sink) in
   X.single_write t bufs
 
-let write (Sink (Resource.T (t, ops)) : sink) bufs =
-  let module X = (val (Resource.get ops Sink)) in
+let write (Sink (t, ops)) bufs =
+  let module X = (val ops#sink) in
   let rec aux = function
     | [] -> ()
     | bufs ->
@@ -161,8 +159,8 @@ let write (Sink (Resource.T (t, ops)) : sink) bufs =
   in
   aux bufs
 
-let copy src (Sink (Resource.T (t, ops)) : sink) =
-  let module X = (val (Resource.get ops Sink)) in
+let copy src (Sink (t, ops)) =
+  let module X = (val ops#sink) in
   X.copy t ~src
 
 let copy_string s = copy (string_source s)
@@ -180,12 +178,14 @@ end
 
 let buffer_sink =
   let ops = Pi.sink (module Buffer_sink) in
-  fun b -> (Sink (Resource.T (b, ops)) : sink)
+  fun b -> (Sink (b, ops))
 
-type two_way_ty = [source_ty | sink_ty | shutdown_ty]
-type 'a two_way' = ([> two_way_ty] as 'a) r
-type two_way = Two_way : _ two_way' -> two_way [@@unboxed]
+type two_way = Two_way : ('a *
+ < source : (module SOURCE with type t = 'a)
+ ; sink : (module SINK with type t = 'a)
+ ; shutdown : (module SHUTDOWN with type t = 'a)
+ ; ..>) -> two_way [@@unboxed]
 
-let shutdown (Two_way (Resource.T (t, ops))) cmd =
-  let module X = (val (Resource.get ops Shutdown)) in
+let shutdown (Two_way (t, ops)) cmd =
+  let module X = (val ops#shutdown) in
   X.shutdown t cmd

@@ -3,8 +3,6 @@
 
     To get an open file, use the functions in the {!Path} module. *)
 
-open Std
-
 (** {2 Types} *)
 
 (** Traditional Unix permissions. *)
@@ -69,23 +67,25 @@ module type WRITE = sig
   val truncate : t -> Optint.Int63.t -> unit
 end
 
-type ro_ty = [`File | Flow.source_ty | Resource.close_ty]
-
-type 'a ro' = ([> ro_ty] as 'a) r
+type ro = Ro : ('a *
+  < read : (module READ with type t = 'a)
+  ; source : (module Flow.SOURCE with type t = 'a)
+  ; close : 'a -> unit
+  ; .. >) -> ro [@@unboxed]
 (** A file opened for reading. *)
-
-type ro = Ro : _ ro' -> ro [@@unboxed]
 
 module Ro : sig
   val to_source : ro -> Flow.source
 end
 
-type rw_ty = [ro_ty | Flow.sink_ty]
-
-type 'a rw' = ([> rw_ty] as 'a) r
+type rw = Rw : ('a *
+  < read : (module READ with type t = 'a)
+  ; source : (module Flow.SOURCE with type t = 'a)
+  ; close : 'a -> unit
+  ; write : (module WRITE with type t = 'a)
+  ; sink : (module Flow.SINK with type t = 'a)
+  ; .. >) -> rw [@@unboxed]
 (** A file opened for reading and writing. *)
-
-type rw = Rw : _ rw' -> rw [@@unboxed]
 
 module Rw : sig
   val to_ro : rw -> ro
@@ -144,11 +144,17 @@ val truncate : rw -> Optint.Int63.t -> unit
 (** {2 Provider Interface} *)
 
 module Pi : sig
-  type (_, _, _) Resource.pi +=
-    | Read : ('t, (module READ with type t = 't), [> ro_ty]) Resource.pi
-    | Write : ('t, (module WRITE with type t = 't), [> rw_ty]) Resource.pi
+  val ro : (module READ with type t = 'a) ->
+    < read : (module READ with type t = 'a)
+    ; source : (module Flow.SOURCE with type t = 'a)
+    ; close : 'a -> unit
+    >
 
-  val ro : (module READ with type t = 't) -> ('t, ro_ty) Resource.handler
-
-  val rw : (module WRITE with type t = 't) -> ('t, rw_ty) Resource.handler
+  val rw : (module WRITE with type t = 'a) ->
+    < read : (module READ with type t = 'a)
+    ; source : (module Flow.SOURCE with type t = 'a)
+    ; close : 'a -> unit
+    ; write : (module WRITE with type t = 'a)
+    ; sink : (module Flow.SINK with type t = 'a)
+    >
 end

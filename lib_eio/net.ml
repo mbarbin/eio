@@ -159,48 +159,93 @@ module Sockaddr = struct
       Format.fprintf f "udp:%a:%d" Ipaddr.pp_for_uri addr port
 end
 
-type socket_ty = [`Socket | `Close]
-type 'a socket = ([> socket_ty] as 'a) r
+module type STREAM_SOCKET = sig
+  type tag
+  include Flow.SHUTDOWN
+  include Flow.SOURCE with type t := t
+  include Flow.SINK with type t := t
+  val close : t -> unit
+end
 
-type 'tag stream_socket_ty = [`Stream | `Platform of 'tag | `Shutdown | socket_ty | Flow.source_ty | Flow.sink_ty]
-type 'a stream_socket = 'a r
-  constraint 'a = [> [> `Generic] stream_socket_ty]
+type ('t, 'tag, 'row) stream_socket_ty =
+  < shutdown : (module Flow.SHUTDOWN with type t = 't)
+  ; source : (module Flow.SOURCE with type t = 't)
+  ; sink : (module Flow.SINK with type t = 't)
+  ; close : 't -> unit
+  ; .. > as 'row
 
-type 'tag listening_socket_ty = [ `Accept | `Platform of 'tag | socket_ty]
-type 'a listening_socket = 'a r
-  constraint 'a = [> [> `Generic] listening_socket_ty]
+type stream_socket =
+  | Stream_socket : ('a * ('a, [> `Generic ], _) stream_socket_ty) ->
+      stream_socket
+[@@unboxed]
 
-type 'a connection_handler = 'a stream_socket -> Sockaddr.stream -> unit
+module type LISTENING_SOCKET = sig
+  type t
+  type tag
 
-type 'tag datagram_socket_ty = [`Datagram | `Platform of 'tag | `Shutdown | socket_ty]
-type 'a datagram_socket = 'a r
-  constraint 'a = [> [> `Generic] datagram_socket_ty]
+  val accept : t -> sw:Switch.t -> stream_socket * Sockaddr.stream
+  val close : t -> unit
+  val listening_addr : t -> Sockaddr.stream
+end
 
-type 'tag ty = [`Network | `Platform of 'tag]
-type 'a t = 'a r
-  constraint 'a = [> [> `Generic] ty]
+type listening_socket =
+  | Listening_socket :
+      ('a *
+       < listening_socket : (module LISTENING_SOCKET with type t = 'a)
+       ; ..>)
+      -> listening_socket [@@unboxed]
+
+type 'a connection_handler = stream_socket -> Sockaddr.stream -> unit
+
+module type DATAGRAM_SOCKET = sig
+  type tag
+  include Flow.SHUTDOWN
+  val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
+  val recv : t -> Cstruct.t -> Sockaddr.datagram * int
+  val close : t -> unit
+end
+
+type datagram_socket =
+  | Datagram_socket :
+      ('a *
+       < shutdown : (module Flow.SHUTDOWN with type t = 'a)
+       ; datagram_socket : (module DATAGRAM_SOCKET with type t = 'a)
+       ; close : 'a -> unit
+       ; .. >)
+      -> datagram_socket [@@unboxed]
+
+module type NETWORK = sig
+  type t
+  type tag
+
+  val listen : t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t -> Sockaddr.stream -> listening_socket
+  val connect : t -> sw:Switch.t -> Sockaddr.stream -> stream_socket
+  val datagram_socket :
+    t
+    -> reuse_addr:bool
+    -> reuse_port:bool
+    -> sw:Switch.t
+    -> [Sockaddr.datagram | `UdpV4 | `UdpV6]
+    -> datagram_socket
+
+  val getaddrinfo : t -> service:string -> string -> Sockaddr.t list
+  val getnameinfo : t -> Sockaddr.t -> (string * string)
+end
+
+type network =
+    Network :
+      ('a *
+       < network : (module NETWORK with type t = 'a)
+       ; ..
+       >)
+      -> network [@@unboxed]
 
 module Pi = struct
-  module type STREAM_SOCKET = sig
-    type tag
-    include Flow.SHUTDOWN
-    include Flow.SOURCE with type t := t
-    include Flow.SINK with type t := t
-    val close : t -> unit
-  end
 
   let stream_socket (type t tag) (module X : STREAM_SOCKET with type t = t and type tag = tag) =
     Resource.handler @@
     H (Resource.Close, X.close) ::
     Resource.bindings (Flow.Pi.two_way (module X))
-
-  module type DATAGRAM_SOCKET = sig
-    type tag
-    include Flow.SHUTDOWN
-    val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
-    val recv : t -> Cstruct.t -> Sockaddr.datagram * int
-    val close : t -> unit
-  end
 
   type (_, _, _) Resource.pi +=
     | Datagram_socket : ('t, (module DATAGRAM_SOCKET with type t = 't), [> _ datagram_socket_ty]) Resource.pi
@@ -212,15 +257,6 @@ module Pi = struct
       H (Resource.Close, X.close)
     ]
 
-  module type LISTENING_SOCKET = sig
-    type t
-    type tag
-
-    val accept : t -> sw:Switch.t -> tag stream_socket_ty r * Sockaddr.stream
-    val close : t -> unit
-    val listening_addr : t -> Sockaddr.stream
-  end
-
   type (_, _, _) Resource.pi +=
     | Listening_socket : ('t, (module LISTENING_SOCKET with type t = 't and type tag = 'tag), [> 'tag listening_socket_ty]) Resource.pi
 
@@ -229,24 +265,6 @@ module Pi = struct
       H (Resource.Close, X.close);
       H (Listening_socket, (module X))
     ]
-
-  module type NETWORK = sig
-    type t
-    type tag
-
-    val listen : t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t -> Sockaddr.stream -> tag listening_socket_ty r
-    val connect : t -> sw:Switch.t -> Sockaddr.stream -> tag stream_socket_ty r
-    val datagram_socket :
-      t
-      -> reuse_addr:bool
-      -> reuse_port:bool
-      -> sw:Switch.t
-      -> [Sockaddr.datagram | `UdpV4 | `UdpV6]
-      -> tag datagram_socket_ty r
-
-    val getaddrinfo : t -> service:string -> string -> Sockaddr.t list
-    val getnameinfo : t -> Sockaddr.t -> (string * string)
-  end
 
   type (_, _, _) Resource.pi +=
     | Network : ('t, (module NETWORK with type t = 't and type tag = 'tag), [> 'tag ty]) Resource.pi
