@@ -249,7 +249,7 @@ module Stdenv : sig
       To use this, see {!Domain_manager}.
   *)
 
-  val domain_mgr : <domain_mgr : _ Domain_manager.t as 'a; ..> -> 'a
+  val domain_mgr : <domain_mgr : Domain_manager.t as 'a; ..> -> 'a
   (** [domain_mgr t] allows running code on other cores. *)
 
   (** {1 Time}

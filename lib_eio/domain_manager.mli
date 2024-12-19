@@ -1,7 +1,8 @@
 type ty = [`Domain_mgr]
-type 'a t = ([> ty] as 'a) Resource.t
+type 'a t' = ([> ty] as 'a) Resource.t
+type t = Domain_mgr : 'a t' -> t [@@unboxed]
 
-val run : _ t -> (unit -> 'a) -> 'a
+val run : t -> (unit -> 'a) -> 'a
 (** [run t f] runs [f ()] in a newly-created domain and returns the result.
 
     Other fibers in the calling domain can run in parallel with the new domain.
@@ -11,7 +12,7 @@ val run : _ t -> (unit -> 'a) -> 'a
 
     If the calling fiber is cancelled, this is propagated to the spawned domain. *)
 
-val run_raw : _ t -> (unit -> 'a) -> 'a
+val run_raw : t -> (unit -> 'a) -> 'a
 (** [run_raw t f] is like {!run}, but does not run an event loop in the new domain,
     and so cannot perform IO, fork fibers, etc. *)
 

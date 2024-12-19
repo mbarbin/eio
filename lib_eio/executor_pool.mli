@@ -30,7 +30,7 @@ type t
 val create :
   sw:Switch.t ->
   domain_count:int ->
-  _ Domain_manager.t ->
+  Domain_manager.t ->
   t
 (** [create ~sw ~domain_count dm] creates a new executor pool.
 
