@@ -130,8 +130,6 @@ module Make_mgr (X : sig
 end) = struct
   type t = X.t
 
-  type tag = [ `Generic | `Unix ]
-
   let pipe _ ~sw =
     (Private.pipe sw :> ([Eio.Resource.close_ty | Eio.Flow.source_ty] r *
     [Eio.Resource.close_ty | Eio.Flow.sink_ty] r))

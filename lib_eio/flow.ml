@@ -32,22 +32,28 @@ module type TWO_WAY = sig
   include SINK with type t := t
 end
 
+type two_way = Two_way : ('a *
+ < source : (module SOURCE with type t = 'a)
+ ; sink : (module SINK with type t = 'a)
+ ; shutdown : (module SHUTDOWN with type t = 'a)
+ ; ..>) -> two_way [@@unboxed]
+
 module Pi = struct
-  let source (type t) (module X : SOURCE with type t = t) =
-    object method source = (module X : SOURCE with type t = t) end
+  let source (type t) (module X : SOURCE with type t = t) (t : t) =
+    Source (t, object method source = (module X : SOURCE with type t = t) end)
 
-  let sink (type t) (module X : SINK with type t = t) =
-    object method sink = (module X : SINK with type t = t) end
+  let sink (type t) (module X : SINK with type t = t) (t : t) =
+    Sink (t, object method sink = (module X : SINK with type t = t) end)
 
-  let shutdown (type t) (module X : SHUTDOWN with type t = t) =
-    object method shutdown = (module X : SHUTDOWN with type t = t) end
+  let shutdown (type t) (module X : SHUTDOWN with type t = t) (t : t) =
+    Shutdown (t, object method shutdown = (module X : SHUTDOWN with type t = t) end)
 
-  let two_way (type t) (module X : TWO_WAY with type t = t) =
-    object
+  let two_way (type t) (module X : TWO_WAY with type t = t) (t : t) =
+    Two_way (t, object
       method shutdown = (module X : SHUTDOWN with type t = t)
       method source = (module X : SOURCE with type t = t)
       method sink = (module X : SINK with type t = t)
-    end
+    end)
 
   let simple_copy (type src) ~single_write t ~src:(Source (src, src_ops)) =
     let rec write_all buf =
@@ -119,9 +125,8 @@ module Cstruct_source = struct
 
 end
 
-let cstruct_source =
-  let ops = Pi.source (module Cstruct_source) in
-  fun data -> (Source ((Cstruct_source.create data, ops)) : source)
+let cstruct_source data =
+  Pi.source (module Cstruct_source) (Cstruct_source.create data)
 
 module String_source = struct
   type t = {
@@ -141,9 +146,8 @@ module String_source = struct
   let create s = { s; offset = 0 }
 end
 
-let string_source : string -> source =
-  let ops = Pi.source (module String_source) in
-  fun s -> (Source (String_source.create s, ops))
+let string_source s =
+  Pi.source (module String_source) (String_source.create s)
 
 let single_write (Sink (t, ops)) bufs =
   let module X = (val ops#sink) in
@@ -176,15 +180,8 @@ module Buffer_sink = struct
   let copy t ~src = Pi.simple_copy ~single_write t ~src
 end
 
-let buffer_sink =
-  let ops = Pi.sink (module Buffer_sink) in
-  fun b -> (Sink (b, ops))
-
-type two_way = Two_way : ('a *
- < source : (module SOURCE with type t = 'a)
- ; sink : (module SINK with type t = 'a)
- ; shutdown : (module SHUTDOWN with type t = 'a)
- ; ..>) -> two_way [@@unboxed]
+let buffer_sink b =
+  Pi.sink (module Buffer_sink) b
 
 let shutdown (Two_way (t, ops)) cmd =
   let module X = (val ops#shutdown) in

@@ -106,14 +106,15 @@ module Pi = struct
          method close = X.close
        end)
 
-  let rw (type t) (module X : WRITE with type t = t) =
-    object
-      method source = (module X : Flow.SOURCE with type t = t)
-      method read = (module X : READ with type t = t)
-      method close = X.close
-      method sink = (module X : Flow.SINK with type t = t)
-      method write = (module X : WRITE with type t = t)
-    end
+  let rw (type t) (module X : WRITE with type t = t) (t : t) =
+    Rw
+      (t, object
+         method source = (module X : Flow.SOURCE with type t = t)
+         method read = (module X : READ with type t = t)
+         method close = X.close
+         method sink = (module X : Flow.SINK with type t = t)
+         method write = (module X : WRITE with type t = t)
+       end)
 end
 
 let stat (Ro (t, ops)) =

@@ -117,11 +117,14 @@ val buffer_sink : Buffer.t -> sink
 
 (** {2 Bidirectional streams} *)
 
-type two_way = Two_way : ('a *
- < source : (module SOURCE with type t = 'a)
- ; sink : (module SINK with type t = 'a)
- ; shutdown : (module SHUTDOWN with type t = 'a)
- ; ..>) -> two_way [@@unboxed]
+type two_way =
+  |  Two_way :
+      ('a *
+       < source : (module SOURCE with type t = 'a)
+       ; sink : (module SINK with type t = 'a)
+       ; shutdown : (module SHUTDOWN with type t = 'a)
+       ; ..>)
+      -> two_way [@@unboxed]
 
 val shutdown : two_way -> shutdown_command -> unit
 (** [shutdown t cmd] indicates that the caller has finished reading or writing [t]
@@ -155,14 +158,10 @@ val close_sink : Closable.closable_sink -> unit
 (** {2 Provider Interface} *)
 
 module Pi : sig
-  val source : (module SOURCE with type t = 't) -> < source : (module SOURCE with type t = 't) >
-  val sink : (module SINK with type t = 't) -> < sink : (module SINK with type t = 't) >
-  val shutdown : (module SHUTDOWN with type t = 't) -> < shutdown : (module SHUTDOWN with type t = 't) >
-  val two_way : (module TWO_WAY with type t = 'a) ->
-    < source : (module SOURCE with type t = 'a)
-    ; sink : (module SINK with type t = 'a)
-    ; shutdown : (module SHUTDOWN with type t = 'a) >
-
+  val source : (module SOURCE with type t = 't) -> 't -> source
+  val sink : (module SINK with type t = 't) -> 't -> sink
+  val shutdown : (module SHUTDOWN with type t = 't) -> 't -> shutdown
+  val two_way : (module TWO_WAY with type t = 'a) -> 'a -> two_way
   val simple_copy : single_write:('t -> Cstruct.t list -> int) -> 't -> src:source -> unit
   (** [simple_copy ~single_write] implements {!SINK}'s [copy] API using [single_write]. *)
 end
