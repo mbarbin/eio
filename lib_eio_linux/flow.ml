@@ -101,7 +101,7 @@ module Impl = struct
 
   let single_write t bufs = Low_level.writev_single t (truncate_to_iomax bufs)
 
-  let copy t ~src =
+  let copy t ~src:(Eio.Flow.Source src) =
     match Eio_unix.Resource.fd_opt src with
     | Some src -> fast_copy_try_splice src t
     | None ->

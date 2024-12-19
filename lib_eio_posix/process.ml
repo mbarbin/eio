@@ -30,7 +30,7 @@ module Impl = struct
       ] in
       let with_actions cwd fn = match cwd with
         | None -> fn actions
-        | Some ((dir, path) : Eio.Fs.dir_ty Eio.Path.t) ->
+        | Some (Eio.Path.Path (dir, path)) ->
           match Fs.as_posix_dir dir with
           | None -> Fmt.invalid_arg "cwd is not an OS directory!"
           | Some dirfd ->

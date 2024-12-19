@@ -226,7 +226,7 @@ module Process_mgr = struct
       ] in
       let with_actions cwd fn = match cwd with
         | None -> fn actions
-        | Some (fd, s) ->
+        | Some (Eio.Path.Path (fd, s)) ->
           match get_dir_fd_opt fd with
           | None -> Fmt.invalid_arg "cwd is not an OS directory!"
           | Some dir_fd ->
@@ -475,19 +475,19 @@ end
 let dir ~label ~path fd = Eio.Resource.T (Dir.v ~label ~path fd, Dir_handler.v)
 
 let stdenv ~run_event_loop =
-  let fs = (dir ~label:"fs" ~path:"" Fs, "") in
-  let cwd = (dir ~label:"cwd" ~path:"" Cwd, "") in
+  let fs = Eio.Path.Path (dir ~label:"fs" ~path:"" Fs, "") in
+  let cwd = Eio.Path.Path (dir ~label:"cwd" ~path:"" Cwd, "") in
   object (_ : stdenv)
-    method stdin  = Flow.stdin
-    method stdout = Flow.stdout
-    method stderr = Flow.stderr
+    method stdin  = Eio.Flow.Source Flow.stdin
+    method stdout = Eio.Flow.Sink Flow.stdout
+    method stderr = Eio.Flow.Sink Flow.stderr
     method net = net
     method process_mgr = process_mgr
     method domain_mgr = domain_mgr ~run_event_loop
     method clock = clock
     method mono_clock = mono_clock
-    method fs = (fs :> Eio.Fs.dir_ty Eio.Path.t)
-    method cwd = (cwd :> Eio.Fs.dir_ty Eio.Path.t)
+    method fs = (fs :> Eio.Path.t)
+    method cwd = (cwd :> Eio.Path.t)
     method secure_random = Flow.secure_random
     method debug = Eio.Private.Debug.v
     method backend_id = "linux"

@@ -15,13 +15,13 @@ let resolve_program name =
 
 let read_of_fd ~sw ~default ~to_close = function
   | None -> default
-  | Some f ->
+  | Some (Eio.Flow.Source f) ->
     match Resource.fd_opt f with
     | Some fd -> fd
     | None ->
       let r, w = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy f w;
+          Eio.Flow.copy (Eio.Flow.Source f) (Eio.Flow.Sink w);
           Eio.Flow.close w
         );
       let r = Resource.fd r in
@@ -30,13 +30,13 @@ let read_of_fd ~sw ~default ~to_close = function
 
 let write_of_fd ~sw ~default ~to_close = function
   | None -> default
-  | Some f ->
+  | Some (Eio.Flow.Sink f) ->
     match Resource.fd_opt f with
     | Some fd -> fd
     | None ->
       let r, w = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy r f;
+          Eio.Flow.copy (Eio.Flow.Source r) (Eio.Flow.Sink f);
           Eio.Flow.close r
         );
       let w = Resource.fd w in
@@ -82,7 +82,7 @@ module Pi = struct
     val spawn_unix :
       t ->
       sw:Switch.t ->
-      ?cwd:Eio.Fs.dir_ty Eio.Path.t ->
+      ?cwd:Eio.Path.t ->
       env:string array ->
       fds:(int * Fd.t * Fork_action.blocking) list ->
       executable:string ->
@@ -106,7 +106,7 @@ module Make_mgr (X : sig
   val spawn_unix :
     t ->
     sw:Switch.t ->
-    ?cwd:Eio.Fs.dir_ty Eio.Path.t ->
+    ?cwd:Eio.Path.t ->
     env:string array ->
     fds:(int * Fd.t * Fork_action.blocking) list ->
     executable:string ->

@@ -47,7 +47,7 @@ module Bench_dir = struct
       | File { name; size; perm } ->
         let buf = Cstruct.create (Int64.to_int size) in
         Path.with_open_out ~create:(`If_missing perm) (fs / name) (fun oc ->
-            Eio.Flow.write oc [ buf ]
+            Eio.Flow.write (Eio.File.Rw.to_sink oc) [ buf ]
           )
     in
     aux Fiber.List.iter fs t

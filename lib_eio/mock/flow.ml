@@ -86,7 +86,7 @@ module Mock_flow = struct
     match t.copy_method with
     | `Read_into -> copy_via_buffer t src
     | `Read_source_buffer ->
-      let Eio.Resource.T (src, ops) = src in
+      let (Eio.Flow.Source (Eio.Resource.T (src, ops))) = src in
       let module Src = (val (Eio.Resource.get ops Eio.Flow.Pi.Source)) in
       let try_rsb = function
         | Eio.Flow.Read_source_buffer rsb -> copy_rsb t (rsb src); true

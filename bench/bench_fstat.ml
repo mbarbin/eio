@@ -16,7 +16,7 @@ let run env =
       let t0 = Unix.gettimeofday () in
       Switch.run (fun sw ->
           for _  = 1 to par do
-            Fiber.fork ~sw (fun () -> run_fiber file)
+            Fiber.fork ~sw (fun () -> run_fiber (Eio.File.Rw.to_ro file))
           done
         );
       let t1 = Unix.gettimeofday () in

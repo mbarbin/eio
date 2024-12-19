@@ -59,10 +59,10 @@ let test_copy () =
   let from_pipe, to_pipe = Eio_unix.pipe sw in
   let buffer = Buffer.create 20 in
   Fiber.both
-    (fun () -> Eio.Flow.copy from_pipe (Eio.Flow.buffer_sink buffer))
+    (fun () -> Eio.Flow.copy (Eio.Flow.Source from_pipe) (Eio.Flow.buffer_sink buffer))
     (fun () ->
-       Eio.Flow.copy (Eio.Flow.string_source msg) to_pipe;
-       Eio.Flow.copy (Eio.Flow.string_source msg) to_pipe;
+       Eio.Flow.copy (Eio.Flow.string_source msg) (Eio.Flow.Sink to_pipe);
+       Eio.Flow.copy (Eio.Flow.string_source msg) (Eio.Flow.Sink to_pipe);
        Eio.Flow.close to_pipe
     );
   Alcotest.(check string) "Copy correct" (msg ^ msg) (Buffer.contents buffer);
@@ -78,9 +78,14 @@ let test_direct_copy () =
   let buffer = Buffer.create 20 in
   let to_output = Eio.Flow.buffer_sink buffer in
   Switch.run (fun sw ->
-      Fiber.fork ~sw (fun () -> Trace.log "copy1"; Eio.Flow.copy from_pipe1 to_pipe2; Eio.Flow.close to_pipe2);
-      Fiber.fork ~sw (fun () -> Trace.log "copy2"; Eio.Flow.copy from_pipe2 to_output);
-      Eio.Flow.copy (Eio.Flow.string_source msg) to_pipe1;
+      Fiber.fork ~sw (fun () ->
+        Trace.log "copy1";
+        Eio.Flow.copy (Eio.Flow.Source from_pipe1) (Eio.Flow.Sink to_pipe2);
+        Eio.Flow.close to_pipe2);
+      Fiber.fork ~sw (fun () ->
+        Trace.log "copy2";
+        Eio.Flow.copy (Eio.Flow.Source from_pipe2) to_output);
+      Eio.Flow.copy (Eio.Flow.string_source msg) (Eio.Flow.Sink to_pipe1);
       Eio.Flow.close to_pipe1;
     );
   Alcotest.(check string) "Copy correct" msg (Buffer.contents buffer);
@@ -118,7 +123,7 @@ let test_no_sqe () =
     for _ = 1 to 8 do
       Fiber.fork ~sw (fun () ->
           let r, _w = Eio_unix.pipe sw in
-          ignore (Eio.Flow.single_read r (Cstruct.create 1) : int);
+          ignore (Eio.Flow.single_read (Eio.Flow.Source r) (Cstruct.create 1) : int);
           assert false
         )
     done;
@@ -163,7 +168,7 @@ let test_statx () =
   let ( / ) = Eio.Path.( / ) in
   let path = env#cwd / "test2.data" in
   Eio.Path.with_open_out path ~create:(`Or_truncate 0o600) @@ fun file ->
-  Eio.Flow.copy_string "hello" file;
+  Eio.Flow.copy_string "hello" (Eio.File.Rw.to_sink file);
   let buf = Uring.Statx.create () in
   let test expected_len ~follow dir path =
     Eio_linux.Low_level.statx ~follow ~mask:X.Mask.(type' + size) dir path buf;
@@ -172,7 +177,7 @@ let test_statx () =
   in
   (* Lookup via cwd *)
   test 5L ~follow:false Cwd "test2.data";
-  Eio.Flow.copy_string "+" file;
+  Eio.Flow.copy_string "+" (Eio.File.Rw.to_sink file);
   (* Lookup via file FD *)
   Switch.run (fun sw ->
       let fd = Eio_linux.Low_level.openat2 ~sw
@@ -185,7 +190,7 @@ let test_statx () =
       test 6L ~follow:false (FD fd) ""
     );
   (* Lookup via directory FD *)
-  Eio.Flow.copy_string "+" file;
+  Eio.Flow.copy_string "+" (Eio.File.Rw.to_sink file);
   Switch.run (fun sw ->
       let fd = Eio_linux.Low_level.openat2 ~sw
           ~access:`R

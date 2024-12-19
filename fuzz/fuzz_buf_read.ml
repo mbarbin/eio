@@ -249,7 +249,7 @@ let catch f x =
 let random chunks ops =
   let model = Model.of_chunks chunks in
   let chunks_len = String.length !model in
-  let r = Buf_read.of_flow (mock_flow chunks) ~initial_size ~max_size in
+  let r = Buf_read.of_flow (Eio.Flow.Source (mock_flow chunks)) ~initial_size ~max_size in
   if debug then print_endline "*** start ***";
   let check_eq (Op (pp, a, b)) =
     if debug then (

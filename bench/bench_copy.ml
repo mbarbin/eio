@@ -11,14 +11,14 @@ let run_client sock =
     (fun () ->
        let chunk = Cstruct.create chunk_size in
        for _ = 1 to n_chunks do
-         Eio.Flow.write sock [chunk]
+         Eio.Flow.write (Eio.Flow.Sink sock) [chunk]
        done;
-       Eio.Flow.shutdown sock `Send
+       Eio.Flow.shutdown (Eio.Flow.Two_way sock) `Send
     )
     (fun () ->
        let chunk = Cstruct.create chunk_size in
        for _ = 1 to n_chunks do
-         Eio.Flow.read_exact sock chunk
+         Eio.Flow.read_exact (Eio.Flow.Source sock) chunk
        done
     )
 
@@ -37,8 +37,8 @@ let time name service =
 
 let run _env =
   [
-    time "default" (fun sock -> Eio.Flow.copy sock sock);
+    time "default" (fun sock -> Eio.Flow.copy (Eio.Flow.Source sock) (Eio.Flow.Sink sock));
     time "buf_read" (fun sock ->
-        let r = Eio.Buf_read.of_flow sock ~initial_size:(64 * 1024) ~max_size:(64 * 1024) |> Eio.Buf_read.as_flow in
-        Eio.Flow.copy r sock);
+        let r = Eio.Buf_read.of_flow (Eio.Flow.Source sock) ~initial_size:(64 * 1024) ~max_size:(64 * 1024) |> Eio.Buf_read.as_flow in
+        Eio.Flow.copy r (Eio.Flow.Sink sock));
   ]

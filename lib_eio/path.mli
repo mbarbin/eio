@@ -31,20 +31,22 @@
 open Std
 open Fs
 
-type 'a t = 'a Fs.dir * path
+type 'a t' = 'a Fs.dir * path
 (** An OS directory FD and a path relative to it, for use with e.g. [openat(2)]. *)
 
-val ( / ) : 'a t -> string -> 'a t
+type t = Path : 'a t' -> t [@@unboxed]
+
+val ( / ) : t -> string -> t
 (** [t / step] is [t] with [step] appended to [t]'s path,
     or replacing [t]'s path if [step] is absolute:
 
     - [(fd, "foo") / "bar" = (fd, "foo/bar")]
     - [(fd, "foo") / "/bar" = (fd, "/bar")] *)
 
-val pp : _ t Fmt.t
+val pp : t Fmt.t
 (** [pp] formats a [_ t] as "<label:path>", suitable for logging. *)
 
-val native : _ t -> string option
+val native : t -> string option
 (** [native t] returns a path that can be used to refer to [t] with the host
     platform's native string-based file-system APIs, if available.
     This is intended for interoperability with non-Eio libraries.
@@ -58,10 +60,10 @@ val native : _ t -> string option
     try to write to "/home/mal/output.txt" just as mal replaces "output.txt"
     with a symlink to "/etc/passwd". *)
 
-val native_exn : _ t -> string
+val native_exn : t -> string
 (** Like {!native}, but raise a suitable exception if the path is not a native path. *)
 
-val split : 'a t -> ('a t * string) option
+val split' : 'a t' -> ('a t' * string) option
 (** [split t] returns [Some (dir, basename)], where [basename] is the last path component in [t]
     and [dir] is [t] without [basename].
 
@@ -81,30 +83,32 @@ val split : 'a t -> ('a t * string) option
     - [split (root, "/") = None]
 *)
 
+val split : t -> (t * string) option
+
 (** {1 Reading files} *)
 
-val load : _ t -> string
+val load : t -> string
 (** [load t] returns the contents of the given file.
 
     This is a convenience wrapper around {!with_open_in}. *)
 
-val open_in : sw:Switch.t -> _ t -> File.ro_ty r
+val open_in : sw:Switch.t -> t -> File.ro
 (** [open_in ~sw t] opens [t] for reading.
 
     Note: files are always opened in binary mode. *)
 
-val with_open_in : _ t -> (File.ro_ty r -> 'a) -> 'a
+val with_open_in : t -> (File.ro -> 'a) -> 'a
 (** [with_open_in] is like [open_in], but calls [fn flow] with the new flow and closes
     it automatically when [fn] returns (if it hasn't already been closed by then). *)
 
-val with_lines : _ t -> (string Seq.t -> 'a) -> 'a
+val with_lines : t -> (string Seq.t -> 'a) -> 'a
 (** [with_lines t fn] is a convenience function for streaming the lines of the file.
 
     It uses {!Buf_read.lines}. *)
 
 (** {1 Writing files} *)
 
-val save : ?append:bool -> create:create -> _ t -> string -> unit
+val save : ?append:bool -> create:create -> t -> string -> unit
 (** [save t data ~create] writes [data] to [t].
 
     This is a convenience wrapper around {!with_open_out}. *)
@@ -113,7 +117,7 @@ val open_out :
   sw:Switch.t ->
   ?append:bool ->
   create:create ->
-  _ t -> File.rw_ty Resource.t
+  t -> File.rw
 (** [open_out ~sw t] opens [t] for reading and writing.
 
     Note: files are always opened in binary mode.
@@ -123,32 +127,32 @@ val open_out :
 val with_open_out :
   ?append:bool ->
   create:create ->
-  _ t -> (File.rw_ty r -> 'a) -> 'a
+  t -> (File.rw -> 'a) -> 'a
 (** [with_open_out] is like [open_out], but calls [fn flow] with the new flow and closes
     it automatically when [fn] returns (if it hasn't already been closed by then). *)
 
 (** {1 Directories} *)
 
-val mkdir : perm:File.Unix_perm.t -> _ t -> unit
+val mkdir : perm:File.Unix_perm.t -> t -> unit
 (** [mkdir ~perm t] creates a new directory [t] with permissions [perm]. *)
 
-val mkdirs : ?exists_ok:bool -> perm:File.Unix_perm.t -> _ t -> unit
+val mkdirs : ?exists_ok:bool -> perm:File.Unix_perm.t -> t -> unit
 (** [mkdirs ~perm t] creates directory [t] along with any missing ancestor directories, recursively.
 
     All created directories get permissions [perm], but existing directories do not have their permissions changed.
 
     @param exist_ok If [false] (the default) then we raise {! Fs.Already_exists} if [t] is already a directory. *)
 
-val open_dir : sw:Switch.t -> _ t -> [< `Close | dir_ty] t
+val open_dir : sw:Switch.t -> t -> [< `Close | dir_ty] t'
 (** [open_dir ~sw t] opens [t].
 
     This can be passed to functions to grant access only to the subtree [t]. *)
 
-val with_open_dir : _ t -> ([< `Close | dir_ty] t -> 'a) -> 'a
+val with_open_dir : t -> ([< `Close | dir_ty] t' -> 'a) -> 'a
 (** [with_open_dir] is like [open_dir], but calls [fn dir] with the new directory and closes
     it automatically when [fn] returns (if it hasn't already been closed by then). *)
 
-val read_dir : _ t -> string list
+val read_dir : t -> string list
 (** [read_dir t] reads directory entries for [t].
 
     The entries are sorted using {! String.compare}.
@@ -157,45 +161,45 @@ val read_dir : _ t -> string list
 
 (** {1 Metadata} *)
 
-val stat : follow:bool -> _ t -> File.Stat.t
+val stat : follow:bool -> t -> File.Stat.t
 (** [stat ~follow t] returns metadata about the file [t].
 
     If [t] is a symlink, the information returned is about the target if [follow = true],
     otherwise it is about the link itself. *)
 
-val kind : follow:bool -> _ t -> [ File.Stat.kind | `Not_found ]
+val kind : follow:bool -> t -> [ File.Stat.kind | `Not_found ]
 (** [kind ~follow t] is the type of [t], or [`Not_found] if it doesn't exist.
 
     @param follow If [true] and [t] is a symlink, return the type of the target rather than [`Symbolic_link]. *)
 
-val is_file : _ t -> bool
+val is_file : t -> bool
 (** [is_file t] is [true] if [t] is a regular file, and [false] if it doesn't exist or has a different type.
 
     [is_file t] is [kind ~follow:true t = `Regular_file]. *)
 
-val is_directory : _ t -> bool
+val is_directory : t -> bool
 (** [is_directory t] is [true] if [t] is a directory, and [false] if it doesn't exist or has a different type.
 
     [is_directory t] is [kind ~follow:true t = `Directory]. *)
 
-val read_link : _ t -> string
+val read_link : t -> string
 (** [read_link t] is the target of symlink [t]. *)
 
 (** {1 Other} *)
 
-val unlink : _ t -> unit
+val unlink : t -> unit
 (** [unlink t] removes directory entry [t].
 
     Note: this cannot be used to unlink directories.
     Use {!rmdir} for directories. *)
 
-val rmdir : _ t -> unit
+val rmdir : t -> unit
 (** [rmdir t] removes directory entry [t].
     This only works when the entry is itself a directory.
 
     Note: this usually requires the directory to be empty. *)
 
-val rmtree : ?missing_ok:bool -> _ t -> unit
+val rmtree : ?missing_ok:bool -> t -> unit
 (** [rmtree t] removes [t] (and its contents, recursively, if it's a directory).
 
     @param missing_ok If [false] (the default), raise an {!Fs.Not_found} IO error if [t] doesn't exist.
@@ -203,12 +207,12 @@ val rmtree : ?missing_ok:bool -> _ t -> unit
                       This applies recursively, allowing two processes
                       to attempt to remove a tree at the same time. *)
 
-val rename : _ t -> _ t -> unit
+val rename : t -> t -> unit
 (** [rename old_t new_t] atomically unlinks [old_t] and links it as [new_t].
 
     If [new_t] already exists, it is atomically replaced. *)
 
-val symlink : link_to:string -> _ t -> unit
+val symlink : link_to:string -> t -> unit
 (** [symlink ~link_to t] creates a symbolic link [t] to [link_to].
 
     [t] is the symlink that is created and [link_to] is the name used in the link.

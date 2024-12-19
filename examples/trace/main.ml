@@ -48,13 +48,13 @@ let main net =
        traceln "server: starting";
        let c, _addr = Eio.Net.accept ~sw s in
        traceln "server: got connection from client";
-       let msg = Eio.Flow.read_all c in
+       let msg = Eio.Flow.read_all (Eio.Flow.Source c) in
        traceln "server: read %S from socket" msg
     )
     (fun () ->
        traceln "client: connecting socket...";
        let c = Eio.Net.connect ~sw net addr in
-       Eio.Flow.copy_string "Hello" c;
+       Eio.Flow.copy_string "Hello" (Eio.Flow.Sink c);
        Eio.Flow.close c
     )
 

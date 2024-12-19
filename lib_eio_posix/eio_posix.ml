@@ -26,17 +26,17 @@ let run main =
   let stdout = (Flow.of_fd Eio_unix.Fd.stdout :> _ Eio_unix.sink) in
   let stderr = (Flow.of_fd Eio_unix.Fd.stderr :> _ Eio_unix.sink) in
   Domain_mgr.run_event_loop main @@ object (_ : stdenv)
-    method stdin = stdin
-    method stdout = stdout
-    method stderr = stderr
+    method stdin = Eio.Flow.Source stdin
+    method stdout = Eio.Flow.Sink stdout
+    method stderr = Eio.Flow.Sink stderr
     method debug = Eio.Private.Debug.v
     method clock = Time.clock
     method mono_clock = Time.mono_clock
     method net = Net.v
     method process_mgr = Process.mgr
     method domain_mgr = Domain_mgr.v
-    method cwd = ((Fs.cwd, "") :> Eio.Fs.dir_ty Eio.Path.t)
-    method fs = ((Fs.fs, "") :> Eio.Fs.dir_ty Eio.Path.t)
+    method cwd = (Eio.Path.Path (Fs.cwd, "") :> Eio.Path.t)
+    method fs = (Eio.Path.Path (Fs.fs, "") :> Eio.Path.t)
     method secure_random = Flow.secure_random
     method backend_id = "posix"
   end

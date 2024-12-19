@@ -71,10 +71,10 @@ module Pi = struct
     val spawn :
       t ->
       sw:Switch.t ->
-      ?cwd:Fs.dir_ty Path.t ->
-      ?stdin:Flow.source_ty r ->
-      ?stdout:Flow.sink_ty r ->
-      ?stderr:Flow.sink_ty r ->
+      ?cwd:Path.t ->
+      ?stdin:Flow.source ->
+      ?stdout:Flow.sink ->
+      ?stderr:Flow.sink ->
       ?env:string array ->
       ?executable:string ->
       string list ->
@@ -125,12 +125,12 @@ let spawn (type tag) ~sw (t : [> tag mgr_ty] r) ?cwd ?stdin ?stdout ?stderr ?env
   let (Resource.T (v, ops)) = t in
   let module X = (val (Resource.get ops Pi.Mgr)) in
   X.spawn v ~sw
-    ?cwd:(cwd :> Fs.dir_ty Path.t option)
+    ?cwd:(cwd :> Path.t option)
     ?env
     ?executable args
-    ?stdin:(stdin :> Flow.source_ty r option)
-    ?stdout:(stdout :> Flow.sink_ty r option)
-    ?stderr:(stderr :> Flow.sink_ty r option)
+    ?stdin:(stdin :> Flow.source option)
+    ?stdout:(stdout :> Flow.sink option)
+    ?stderr:(stderr :> Flow.sink option)
 
 let run t ?cwd ?stdin ?stdout ?stderr ?(is_success = Int.equal 0) ?env ?executable args =
   Switch.run ~name:"Process.run" @@ fun sw ->
@@ -149,9 +149,9 @@ let parse_out (type tag) (t : [> tag mgr_ty] r) parse ?cwd ?stdin ?stderr ?is_su
   Switch.run ~name:"Process.parse_out" @@ fun sw ->
   let r, w = pipe t ~sw in
   try
-    let child = spawn ~sw t ?cwd ?stdin ~stdout:w ?stderr ?env ?executable args in
+    let child = spawn ~sw t ?cwd ?stdin ~stdout:(Flow.Sink w) ?stderr ?env ?executable args in
     Flow.close w;
-    let output = Buf_read.parse_exn parse r ~max_size:max_int in
+    let output = Buf_read.parse_exn parse (Flow.Source r) ~max_size:max_int in
     Flow.close r;
     await_exn ?is_success child;
     output

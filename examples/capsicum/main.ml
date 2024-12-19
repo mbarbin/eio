@@ -36,5 +36,5 @@ let () =
   | Error `Not_supported -> traceln "!! CAPSICUM PROTECTION NOT AVAILABLE !!"
   end;
   (* Run tests: *)
-  test_eio dir;
+  test_eio (Eio.Path.Path dir);
   test_legacy ()

@@ -72,7 +72,7 @@ module Impl = struct
     with End_of_file -> ()
 
   let copy t ~src =
-    let Eio.Resource.T (src_t, ops) = src in
+    let Eio.Flow.Source (Eio.Resource.T (src_t, ops)) = src in
     let module Src = (val (Eio.Resource.get ops Eio.Flow.Pi.Source)) in
     let rec aux = function
       | Eio.Flow.Read_source_buffer rsb :: _ -> copy_with_rsb (rsb src_t) t

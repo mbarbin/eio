@@ -75,10 +75,10 @@ val signal : _ t -> int -> unit
 val spawn :
   sw:Switch.t ->
   [> 'tag mgr_ty] r ->
-  ?cwd:Fs.dir_ty Path.t ->
-  ?stdin:_ Flow.source ->
-  ?stdout:_ Flow.sink ->
-  ?stderr:_ Flow.sink ->
+  ?cwd:Path.t ->
+  ?stdin:Flow.source ->
+  ?stdout:Flow.sink ->
+  ?stderr:Flow.sink ->
   ?env:string array ->
   ?executable:string ->
   string list -> 'tag ty r
@@ -101,10 +101,10 @@ val spawn :
 
 val run :
   _ mgr ->
-  ?cwd:_ Path.t ->
-  ?stdin:_ Flow.source ->
-  ?stdout:_ Flow.sink ->
-  ?stderr:_ Flow.sink ->
+  ?cwd:Path.t ->
+  ?stdin:Flow.source ->
+  ?stdout:Flow.sink ->
+  ?stderr:Flow.sink ->
   ?is_success:(int -> bool) ->
   ?env:string array ->
   ?executable:string ->
@@ -120,9 +120,9 @@ val run :
 val parse_out :
   _ mgr ->
   'a Buf_read.parser ->
-  ?cwd:_ Path.t ->
-  ?stdin:_ Flow.source ->
-  ?stderr:_ Flow.sink ->
+  ?cwd:Path.t ->
+  ?stdin:Flow.source ->
+  ?stderr:Flow.sink ->
   ?is_success:(int -> bool) ->
   ?env:string array ->
   ?executable:string ->
@@ -176,10 +176,10 @@ module Pi : sig
     val spawn :
       t ->
       sw:Switch.t ->
-      ?cwd:Fs.dir_ty Path.t ->
-      ?stdin:Flow.source_ty r ->
-      ?stdout:Flow.sink_ty r ->
-      ?stderr:Flow.sink_ty r ->
+      ?cwd:Path.t ->
+      ?stdin:Flow.source ->
+      ?stdout:Flow.sink ->
+      ?stderr:Flow.sink ->
       ?env:string array ->
       ?executable:string ->
       string list ->

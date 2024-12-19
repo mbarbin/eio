@@ -35,4 +35,5 @@ let main ~domain_mgr zero =
 let ( / ) = Eio.Path.( / )
 
 let run env =
-  Eio.Path.with_open_in (env#fs / "/dev/zero") (main ~domain_mgr:env#domain_mgr)
+  Eio.Path.with_open_in (env#fs / "/dev/zero") (fun file ->
+    main ~domain_mgr:env#domain_mgr (Eio.File.Ro.to_source file))

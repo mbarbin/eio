@@ -9,12 +9,16 @@ open Std
 (** {2 Types} *)
 
 type source_ty = [`R | `Flow]
-type 'a source = ([> source_ty] as 'a) r
+type 'a source' = ([> source_ty] as 'a) r
 (** A readable flow provides a stream of bytes. *)
 
+type source = Source : _ source' -> source [@@unboxed]
+
 type sink_ty = [`W | `Flow]
-type 'a sink = ([> sink_ty] as 'a) r
+type 'a sink' = ([> sink_ty] as 'a) r
 (** A writeable flow accepts a stream of bytes. *)
+
+type sink = Sink : _ sink' -> sink [@@unboxed]
 
 type shutdown_ty = [`Shutdown]
 type 'a shutdown = ([> shutdown_ty] as 'a) r
@@ -30,7 +34,7 @@ type shutdown_command = [
 
 (** {2 Reading} *)
 
-val single_read : _ source -> Cstruct.t -> int
+val single_read : source -> Cstruct.t -> int
 (** [single_read src buf] reads one or more bytes into [buf].
 
     It returns the number of bytes read (which may be less than the
@@ -44,14 +48,14 @@ val single_read : _ source -> Cstruct.t -> int
 
     @raise End_of_file if there is no more data to read *)
 
-val read_exact : _ source -> Cstruct.t -> unit
+val read_exact : source -> Cstruct.t -> unit
 (** [read_exact src dst] keeps reading into [dst] until it is full.
     @raise End_of_file if the buffer could not be filled. *)
 
-val string_source : string -> source_ty r
+val string_source : string -> source
 (** [string_source s] is a source that gives the bytes of [s]. *)
 
-val cstruct_source : Cstruct.t list -> source_ty r
+val cstruct_source : Cstruct.t list -> source
 (** [cstruct_source cs] is a source that gives the bytes of [cs]. *)
 
 type 't read_method += Read_source_buffer of ('t -> (Cstruct.t list -> int) -> unit)
@@ -65,7 +69,7 @@ type 't read_method += Read_source_buffer of ('t -> (Cstruct.t list -> int) -> u
 
 (** {2 Writing} *)
 
-val write : _ sink -> Cstruct.t list -> unit
+val write : sink -> Cstruct.t list -> unit
 (** [write dst bufs] writes all bytes from [bufs].
 
     You should not perform multiple concurrent writes on the same flow
@@ -76,16 +80,16 @@ val write : _ sink -> Cstruct.t list -> unit
     - {!Buf_write} to combine multiple small writes.
     - {!copy} for bulk transfers, as it allows some extra optimizations. *)
 
-val single_write : _ sink -> Cstruct.t list -> int
+val single_write : sink -> Cstruct.t list -> int
 (** [single_write dst bufs] writes at least one byte from [bufs] and returns the number of bytes written. *)
 
-val copy : _ source -> _ sink -> unit
+val copy : source -> sink -> unit
 (** [copy src dst] copies data from [src] to [dst] until end-of-file. *)
 
-val copy_string : string -> _ sink -> unit
+val copy_string : string -> sink -> unit
 (** [copy_string s = copy (string_source s)] *)
 
-val buffer_sink : Buffer.t -> sink_ty r
+val buffer_sink : Buffer.t -> sink
 (** [buffer_sink b] is a sink that adds anything sent to it to [b].
 
     To collect data as a cstruct, use {!Buf_read} instead. *)
@@ -93,9 +97,10 @@ val buffer_sink : Buffer.t -> sink_ty r
 (** {2 Bidirectional streams} *)
 
 type two_way_ty = [source_ty | sink_ty | shutdown_ty]
-type 'a two_way = ([> two_way_ty] as 'a) r
+type 'a two_way' = ([> two_way_ty] as 'a) r
+type two_way = Two_way : _ two_way' -> two_way [@@unboxed]
 
-val shutdown : _ two_way -> shutdown_command -> unit
+val shutdown : two_way -> shutdown_command -> unit
 (** [shutdown t cmd] indicates that the caller has finished reading or writing [t]
     (depending on [cmd]).
 
@@ -124,7 +129,7 @@ module Pi : sig
 
     val single_write : t -> Cstruct.t list -> int
 
-    val copy : t -> src:_ source -> unit
+    val copy : t -> src:source -> unit
     (** [copy t ~src] allows for optimising copy operations.
 
         If you have no optimisations, you can use {!simple_copy} to implement this using {!single_write}. *)
@@ -152,7 +157,7 @@ module Pi : sig
     | Sink : ('t, (module SINK with type t = 't), [> sink_ty]) Resource.pi
     | Shutdown : ('t, (module SHUTDOWN with type t = 't), [> shutdown_ty]) Resource.pi
 
-  val simple_copy : single_write:('t -> Cstruct.t list -> int) -> 't -> src:_ source -> unit
+  val simple_copy : single_write:('t -> Cstruct.t list -> int) -> 't -> src:source -> unit
   (** [simple_copy ~single_write] implements {!SINK}'s [copy] API using [single_write]. *)
 end
 

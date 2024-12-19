@@ -60,11 +60,24 @@ end
 
 type ro_ty = [`File | Flow.source_ty | Resource.close_ty]
 
-type 'a ro = ([> ro_ty] as 'a) r
+type 'a ro' = ([> ro_ty] as 'a) r
+
+type ro = Ro : 'a ro' -> ro [@@unboxed]
+
+module Ro = struct
+  let to_source (Ro r) = Flow.Source r
+end
 
 type rw_ty = [ro_ty | Flow.sink_ty]
 
-type 'a rw = ([> rw_ty] as 'a) r
+type 'a rw' = ([> rw_ty] as 'a) r
+
+type rw = Rw : 'a rw' -> rw [@@unboxed]
+
+module Rw = struct
+  let to_ro (Rw r) = Ro r
+  let to_sink (Rw r) = Flow.Sink r
+end
 
 module Pi = struct
   module type READ = sig
@@ -104,19 +117,19 @@ module Pi = struct
     )
 end
 
-let stat (Resource.T (t, ops)) =
+let stat (Ro (Resource.T (t, ops))) =
   let module X = (val (Resource.get ops Pi.Read)) in
   X.stat t
 
 let size t = (stat t).size
 
-let pread (Resource.T (t, ops)) ~file_offset bufs =
+let pread (Ro (Resource.T (t, ops))) ~file_offset bufs =
   let module X = (val (Resource.get ops Pi.Read)) in
   let got = X.pread t ~file_offset bufs in
   assert (got > 0 && got <= Cstruct.lenv bufs);
   got
 
-let pread_exact (Resource.T (t, ops)) ~file_offset bufs =
+let pread_exact (Ro (Resource.T (t, ops))) ~file_offset bufs =
   let module X = (val (Resource.get ops Pi.Read)) in
   let rec aux ~file_offset bufs =
     if Cstruct.lenv bufs > 0 then (
@@ -127,13 +140,13 @@ let pread_exact (Resource.T (t, ops)) ~file_offset bufs =
   in
   aux ~file_offset bufs
 
-let pwrite_single (Resource.T (t, ops)) ~file_offset bufs =
+let pwrite_single (Rw (Resource.T (t, ops))) ~file_offset bufs =
   let module X = (val (Resource.get ops Pi.Write)) in
   let got = X.pwrite t ~file_offset bufs in
   assert (got > 0 && got <= Cstruct.lenv bufs);
   got
 
-let pwrite_all (Resource.T (t, ops)) ~file_offset bufs =
+let pwrite_all (Rw (Resource.T (t, ops))) ~file_offset bufs =
   let module X = (val (Resource.get ops Pi.Write)) in
   let rec aux ~file_offset bufs =
     if Cstruct.lenv bufs > 0 then (
@@ -144,14 +157,14 @@ let pwrite_all (Resource.T (t, ops)) ~file_offset bufs =
   in
   aux ~file_offset bufs
 
-let seek (Resource.T (t, ops)) off cmd =
+let seek (Ro (Resource.T (t, ops))) off cmd =
   let module X = (val (Resource.get ops Pi.Read)) in
   X.seek t off cmd
 
-let sync (Resource.T (t, ops)) =
+let sync (Rw (Resource.T (t, ops))) =
   let module X = (val (Resource.get ops Pi.Write)) in
   X.sync t
 
-let truncate (Resource.T (t, ops)) len =
+let truncate (Rw (Resource.T (t, ops))) len =
   let module X = (val (Resource.get ops Pi.Write)) in
   X.truncate t len

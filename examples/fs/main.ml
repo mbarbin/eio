@@ -16,7 +16,7 @@ let scan_mli t f =
     )
 
 (* Walk the tree rooted at [t] and scan any .mli files found. *)
-let rec scan t f =
+let rec scan ((Eio.Path.Path t') as t) f =
   match Eio.Path.kind ~follow:false t with
   | `Directory ->
     Eio.Path.read_dir t |> List.iter (function
@@ -24,7 +24,7 @@ let rec scan t f =
         | item when String.starts_with ~prefix:"." item -> () (* Skip hidden items *)
         | item -> scan (t / item) f
       )
-  | `Regular_file when Filename.check_suffix (snd t) ".mli" -> scan_mli t f
+  | `Regular_file when Filename.check_suffix (snd t') ".mli" -> scan_mli t f
   | _ -> ()
 
 let () =

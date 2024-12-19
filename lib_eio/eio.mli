@@ -148,7 +148,7 @@ module Flow : sig
 
   (** {2 Convenience wrappers} *)
 
-  val read_all : _ source -> string
+  val read_all : source -> string
   (** [read_all src] is a convenience wrapper to read an entire flow.
 
       It is the same as [Buf_read.(parse_exn take_all) src ~max_size:max_int] *)
@@ -207,19 +207,19 @@ module Stdenv : sig
 
       To use these, see {!Flow}. *)
 
-  val stdin  : <stdin  : _ Flow.source as 'a; ..> -> 'a
-  val stdout : <stdout : _ Flow.sink   as 'a; ..> -> 'a
-  val stderr : <stderr : _ Flow.sink   as 'a; ..> -> 'a
+  val stdin  : <stdin  : Flow.source as 'a; ..> -> 'a
+  val stdout : <stdout : Flow.sink   as 'a; ..> -> 'a
+  val stderr : <stderr : Flow.sink   as 'a; ..> -> 'a
 
   (** {1 File-system access}
 
       To use these, see {!Path}. *)
 
-  val cwd : <cwd : _ Path.t as 'a; ..> -> 'a
+  val cwd : <cwd : Path.t as 'a; ..> -> 'a
   (** [cwd t] is the current working directory of the process (this may change
       over time if the process does a "chdir" operation, which is not recommended). *)
 
-  val fs : <fs : _ Path.t as 'a; ..> -> 'a
+  val fs : <fs : Path.t as 'a; ..> -> 'a
   (** [fs t] is the process's full access to the filesystem.
 
       Paths can be absolute or relative (to the current working directory).
@@ -265,7 +265,7 @@ module Stdenv : sig
 
   (** {1 Randomness} *)
 
-  val secure_random : <secure_random : _ Flow.source as 'a; ..> -> 'a
+  val secure_random : <secure_random : Flow.source as 'a; ..> -> 'a
   (** [secure_random t] is an infinite source of random bytes suitable for cryptographic purposes. *)
 
   (** {1 Debugging} *)

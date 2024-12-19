@@ -19,7 +19,7 @@ module Pi : sig
     val spawn_unix :
       t ->
       sw:Switch.t ->
-      ?cwd:Eio.Fs.dir_ty Eio.Path.t ->
+      ?cwd:Eio.Path.t ->
       env:string array ->
       fds:(int * Fd.t * Fork_action.blocking) list ->
       executable:string ->
@@ -41,7 +41,7 @@ module Make_mgr (X : sig
   val spawn_unix :
     t ->
     sw:Switch.t ->
-    ?cwd:Eio.Fs.dir_ty Eio.Path.t ->
+    ?cwd:Eio.Path.t ->
     env:string array ->
     fds:(int * Fd.t * Fork_action.blocking) list ->
     executable:string ->
@@ -52,7 +52,7 @@ end) : Pi.MGR with type t = X.t and type tag = [`Generic | `Unix]
 val spawn_unix :
     sw:Switch.t ->
     _ mgr ->
-    ?cwd:Eio.Fs.dir_ty Eio.Path.t ->
+    ?cwd:Eio.Path.t ->
     fds:(int * Fd.t * Fork_action.blocking) list ->
     ?env:string array ->
     ?executable:string ->
