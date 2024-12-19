@@ -236,16 +236,15 @@ module type NETWORK = sig
   val getnameinfo : t -> Sockaddr.t -> (string * string)
 end
 
-type network =
+type t =
     Network :
       ('a *
        < network : (module NETWORK with type t = 'a)
        ; ..
        >)
-      -> network [@@unboxed]
+      -> t [@@unboxed]
 
 module Pi = struct
-
   let stream_socket (type t) (module X : STREAM_SOCKET with type t = t) (t : t) =
     Stream_socket
       (t, object
@@ -298,40 +297,40 @@ let accept_fork ~sw (t : listening_socket) ~on_error handle =
          )
     )
 
-let listening_addr (type tag) (Resource.T (t, ops) : [> tag listening_socket_ty] r) =
-  let module X = (val (Resource.get ops Pi.Listening_socket)) in
+let listening_addr (type tag) (Listening_socket (t, ops)) =
+  let module X = (val ops#listening_socket) in
   X.listening_addr t
 
-let send (Resource.T (t, ops)) ?dst bufs =
-  let module X = (val (Resource.get ops Pi.Datagram_socket)) in
+let send (Datagram_socket (t, ops)) ?dst bufs =
+  let module X = (val ops#datagram_socket) in
   X.send t ?dst bufs
 
-let recv (Resource.T (t, ops)) buf =
-  let module X = (val (Resource.get ops Pi.Datagram_socket)) in
+let recv (Datagram_socket (t, ops)) buf =
+  let module X = (val ops#datagram_socket) in
   X.recv t buf
 
-let listen (type tag) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t:[> tag ty] r) =
-  let (Resource.T (t, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Network)) in
+let listen (type tag) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : t) =
+  let (Network (t, ops)) = t in
+  let module X = (val ops#network) in
   X.listen t ~reuse_addr ~reuse_port ~backlog ~sw
 
-let connect (type tag) ~sw (t:[> tag ty] r) addr =
-  let (Resource.T (t, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Network)) in
+let connect (type tag) ~sw (t : t) addr =
+  let (Network (t, ops)) = t in
+  let module X = (val ops#network) in
   try X.connect t ~sw addr
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
     Exn.reraise_with_context ex bt "connecting to %a" Sockaddr.pp addr
 
-let datagram_socket (type tag) ?(reuse_addr=false) ?(reuse_port=false) ~sw (t:[> tag ty] r) addr =
-  let (Resource.T (t, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Network)) in
-  let addr = (addr :> [Sockaddr.datagram | `UdpV4 | `UdpV6]) in 
+let datagram_socket (type tag) ?(reuse_addr=false) ?(reuse_port=false) ~sw (t : t) addr =
+  let (Network (t, ops)) = t in
+  let module X = (val ops#network) in
+  let addr = (addr :> [Sockaddr.datagram | `UdpV4 | `UdpV6]) in
   X.datagram_socket t ~reuse_addr ~reuse_port ~sw addr
 
-let getaddrinfo (type tag) ?(service="") (t:[> tag ty] r) hostname =
-  let (Resource.T (t, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Network)) in
+let getaddrinfo (type tag) ?(service="") (t : t) hostname =
+  let (Network (t, ops)) = t in
+  let module X = (val ops#network) in
   X.getaddrinfo t ~service hostname
 
 let getaddrinfo_stream ?service t hostname =
@@ -348,9 +347,9 @@ let getaddrinfo_datagram ?service t hostname =
       | _ -> None
     )
 
-let getnameinfo (type tag) (t:[> tag ty] r) sockaddr =
-  let (Resource.T (t, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Network)) in
+let getnameinfo (type tag) (t : t) sockaddr =
+  let (Network (t, ops)) = t in
+  let module X = (val ops#network) in
   X.getnameinfo t sockaddr
 
 let close = Resource.close
