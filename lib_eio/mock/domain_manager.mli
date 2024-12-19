@@ -1,13 +1,13 @@
 open Eio.Std
 
-val create : unit -> Eio.Domain_manager.ty r
+val create : unit -> Eio.Domain_manager.t
 (** [create ()] is a mock domain manager.
 
     When asked to run a new Eio domain, it just runs it in the parent domain.
     It runs the function in a context where {!id} is a fresh domain ID
     (assigned sequentially starting from 1). *)
 
-val run : (Eio.Domain_manager.ty r -> 'a) -> 'a
+val run : (Eio.Domain_manager.t -> 'a) -> 'a
 (** [run fn] runs [fn dm], where [dm] is a new fake domain manager.
     It also runs {!with_domain_tracing} to display domain IDs in trace output.
  

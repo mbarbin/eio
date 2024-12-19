@@ -1,30 +1,25 @@
 open Std
 
-type ty = [`Domain_mgr]
-type 'a t' = ([> ty] as 'a) r
-
-type t = Domain_mgr : 'a t' -> t [@@unboxed]
-
-module Pi = struct
-  module type MGR = sig
-    type t
-    val run : t -> (cancelled:exn Promise.t -> 'a) -> 'a
-    val run_raw : t -> (unit -> 'a) -> 'a
-  end
-
-  type (_, _, _) Resource.pi +=
-    | Mgr : ('t, (module MGR with type t = 't), [> ty]) Resource.pi
-
-  let mgr (type t) (module X : MGR with type t = t) =
-    Resource.handler [H (Mgr, (module X))]
+module type MGR = sig
+  type t
+  val run : t -> (cancelled:exn Promise.t -> 'a) -> 'a
+  val run_raw : t -> (unit -> 'a) -> 'a
 end
 
-let run_raw (Domain_mgr (Resource.T (t, ops))) fn =
-  let module X = (val (Resource.get ops Pi.Mgr)) in
+type ('a, 'b) mgr = < mgr : (module MGR with type t = 'a); .. > as 'b
+type t = Domain_mgr : ('a * ('a, _) mgr) -> t [@@unboxed]
+
+module Pi = struct
+  let mgr (type t) (module X : MGR with type t = t) : (t, _) mgr =
+    object method mgr = (module X : MGR with type t = t) end
+end
+
+let run_raw (Domain_mgr (t, ops)) fn =
+  let module X = (val ops#mgr) in
   X.run_raw t fn
 
-let run (Domain_mgr (Resource.T (t, ops))) fn =
-  let module X = (val (Resource.get ops Pi.Mgr)) in
+let run (Domain_mgr (t, ops)) fn =
+  let module X = (val ops#mgr) in
   X.run t @@ fun ~cancelled ->
   (* If the spawning fiber is cancelled, [cancelled] gets set to the exception. *)
   try

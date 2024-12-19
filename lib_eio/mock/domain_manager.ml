@@ -29,7 +29,7 @@ end
 
 let create =
   let handler = Eio.Domain_manager.Pi.mgr (module Fake_domain_mgr) in
-  fun () -> Eio.Resource.T (Fake_domain_mgr.create (), handler)
+  fun () -> Eio.Domain_manager.Domain_mgr (Fake_domain_mgr.create (), handler)
 
 let run fn =
   let dm = create () in

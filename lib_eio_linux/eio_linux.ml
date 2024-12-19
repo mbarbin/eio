@@ -293,7 +293,7 @@ end
 
 let domain_mgr ~run_event_loop =
   let handler = Eio.Domain_manager.Pi.mgr (module Domain_mgr) in
-  Eio.Domain_manager.Domain_mgr (Eio.Resource.T (Domain_mgr.make ~run_event_loop, handler))
+  Eio.Domain_manager.Domain_mgr (Domain_mgr.make ~run_event_loop, handler)
 
 module Mono_clock = struct
   type t = unit

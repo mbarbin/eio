@@ -1,6 +1,17 @@
-type ty = [`Domain_mgr]
-type 'a t' = ([> ty] as 'a) Resource.t
-type t = Domain_mgr : 'a t' -> t [@@unboxed]
+module type MGR = sig
+  type t
+
+  val run : t -> (cancelled:exn Promise.t -> 'a) -> 'a
+  (** [run t fn] runs [fn ~cancelled] in a new domain.
+
+      If the calling fiber is cancelled, [cancelled] becomes resolved to the {!Cancel.Cancelled} exception.
+      [fn] should cancel itself in this case. *)
+
+  val run_raw : t -> (unit -> 'a) -> 'a
+end
+
+type ('a, 'b) mgr = < mgr : (module MGR with type t = 'a); .. > as 'b
+type t = Domain_mgr : ('a * ('a, _) mgr) -> t [@@unboxed]
 
 val run : t -> (unit -> 'a) -> 'a
 (** [run t f] runs [f ()] in a newly-created domain and returns the result.
@@ -19,20 +30,5 @@ val run_raw : t -> (unit -> 'a) -> 'a
 (** {2 Provider Interface} *)
 
 module Pi : sig
-  module type MGR = sig
-    type t
-
-    val run : t -> (cancelled:exn Promise.t -> 'a) -> 'a
-    (** [run t fn] runs [fn ~cancelled] in a new domain.
-
-        If the calling fiber is cancelled, [cancelled] becomes resolved to the {!Cancel.Cancelled} exception.
-        [fn] should cancel itself in this case. *)
-
-    val run_raw : t -> (unit -> 'a) -> 'a
-  end
-
-  type (_, _, _) Resource.pi +=
-    | Mgr : ('t, (module MGR with type t = 't), [> ty]) Resource.pi
-
-  val mgr : (module MGR with type t = 't) -> ('t, ty) Resource.handler
+  val mgr : (module MGR with type t = 'a) -> < mgr : (module MGR with type t = 'a) >
 end

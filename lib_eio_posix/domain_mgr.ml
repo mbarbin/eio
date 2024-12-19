@@ -124,4 +124,4 @@ end
 
 let v =
   let handler = Eio.Domain_manager.Pi.mgr (module Impl) in
-  Eio.Domain_manager.Domain_mgr (Eio.Resource.T ((), handler))
+  Eio.Domain_manager.Domain_mgr ((), handler)
