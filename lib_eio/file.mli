@@ -51,6 +51,24 @@ module Stat : sig
   (** Pretty printer for {! t}. *)
 end
 
+module type READ = sig
+  include Flow.Pi.SOURCE
+
+  val pread : t -> file_offset:Optint.Int63.t -> Cstruct.t list -> int
+  val stat : t -> Stat.t
+  val seek : t -> Optint.Int63.t -> [`Set | `Cur | `End] -> Optint.Int63.t
+  val close : t -> unit
+end
+
+module type WRITE = sig
+  include Flow.Pi.SINK
+  include READ with type t := t
+
+  val pwrite : t -> file_offset:Optint.Int63.t -> Cstruct.t list -> int
+  val sync : t -> unit
+  val truncate : t -> Optint.Int63.t -> unit
+end
+
 type ro_ty = [`File | Flow.source_ty | Resource.close_ty]
 
 type 'a ro' = ([> ro_ty] as 'a) r
@@ -126,24 +144,6 @@ val truncate : rw -> Optint.Int63.t -> unit
 (** {2 Provider Interface} *)
 
 module Pi : sig
-  module type READ = sig
-    include Flow.Pi.SOURCE
-
-    val pread : t -> file_offset:Optint.Int63.t -> Cstruct.t list -> int
-    val stat : t -> Stat.t
-    val seek : t -> Optint.Int63.t -> [`Set | `Cur | `End] -> Optint.Int63.t
-    val close : t -> unit
-  end
-
-  module type WRITE = sig
-    include Flow.Pi.SINK
-    include READ with type t := t
-
-    val pwrite : t -> file_offset:Optint.Int63.t -> Cstruct.t list -> int
-    val sync : t -> unit
-    val truncate : t -> Optint.Int63.t -> unit
-  end
-
   type (_, _, _) Resource.pi +=
     | Read : ('t, (module READ with type t = 't), [> ro_ty]) Resource.pi
     | Write : ('t, (module WRITE with type t = 't), [> rw_ty]) Resource.pi

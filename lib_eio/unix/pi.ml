@@ -13,7 +13,7 @@ type (_, _, _) Eio.Resource.pi +=
   | Stream_socket : ('t, (module STREAM_SOCKET with type t = 't), [> `Platform of [> `Unix] | `Socket | `Stream]) Eio.Resource.pi
 
 module type FLOW = sig
-  include Eio.File.Pi.WRITE
+  include Eio.File.WRITE
   include STREAM_SOCKET with type t := t
 end
 
