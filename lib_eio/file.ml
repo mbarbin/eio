@@ -59,7 +59,7 @@ module Stat = struct
 end
 
 module type READ = sig
-  include Flow.Pi.SOURCE
+  include Flow.SOURCE
 
   val pread : t -> file_offset:Optint.Int63.t -> Cstruct.t list -> int
   val stat : t -> Stat.t
@@ -68,7 +68,7 @@ module type READ = sig
 end
 
 module type WRITE = sig
-  include Flow.Pi.SINK
+  include Flow.SINK
   include READ with type t := t
 
   val pwrite : t -> file_offset:Optint.Int63.t -> Cstruct.t list -> int

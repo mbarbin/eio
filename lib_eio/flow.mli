@@ -8,11 +8,31 @@ open Std
 
 (** {2 Types} *)
 
+type 'a read_method = ..
+(** Sources can offer a list of ways to read them, in order of preference. *)
+
+module type SOURCE = sig
+  type t
+  val read_methods : t read_method list
+  val single_read : t -> Cstruct.t -> int
+end
+
 type source_ty = [`R | `Flow]
 type 'a source' = ([> source_ty] as 'a) r
 (** A readable flow provides a stream of bytes. *)
 
 type source = Source : _ source' -> source [@@unboxed]
+
+module type SINK = sig
+  type t
+
+  val single_write : t -> Cstruct.t list -> int
+
+  val copy : t -> src:source -> unit
+  (** [copy t ~src] allows for optimising copy operations.
+
+        If you have no optimisations, you can use {!simple_copy} to implement this using {!single_write}. *)
+end
 
 type sink_ty = [`W | `Flow]
 type 'a sink' = ([> sink_ty] as 'a) r
@@ -20,17 +40,25 @@ type 'a sink' = ([> sink_ty] as 'a) r
 
 type sink = Sink : _ sink' -> sink [@@unboxed]
 
-type shutdown_ty = [`Shutdown]
-type 'a shutdown = ([> shutdown_ty] as 'a) r
-
-type 'a read_method = ..
-(** Sources can offer a list of ways to read them, in order of preference. *)
-
 type shutdown_command = [
   | `Receive  (** Indicate that no more reads will be done *)
   | `Send     (** Indicate that no more writes will be done *)
   | `All      (** Indicate that no more reads or writes will be done *)
 ]
+
+module type SHUTDOWN = sig
+  type t
+  val shutdown : t -> shutdown_command -> unit
+end
+
+type shutdown_ty = [`Shutdown]
+type 'a shutdown = ([> shutdown_ty] as 'a) r
+
+module type TWO_WAY = sig
+  include SHUTDOWN
+  include SOURCE with type t := t
+  include SINK with type t := t
+end
 
 (** {2 Reading} *)
 
@@ -118,38 +146,9 @@ val close : [> `Close] r -> unit
 (** {2 Provider Interface} *)
 
 module Pi : sig
-  module type SOURCE = sig
-    type t
-    val read_methods : t read_method list
-    val single_read : t -> Cstruct.t -> int
-  end
-
-  module type SINK = sig
-    type t
-
-    val single_write : t -> Cstruct.t list -> int
-
-    val copy : t -> src:source -> unit
-    (** [copy t ~src] allows for optimising copy operations.
-
-        If you have no optimisations, you can use {!simple_copy} to implement this using {!single_write}. *)
-  end
-
-  module type SHUTDOWN = sig
-    type t
-    val shutdown : t -> shutdown_command -> unit
-  end
-
   val source : (module SOURCE with type t = 't) -> ('t, source_ty) Resource.handler
   val sink : (module SINK with type t = 't) -> ('t, sink_ty) Resource.handler
   val shutdown : (module SHUTDOWN with type t = 't) -> ('t, shutdown_ty) Resource.handler
-
-  module type TWO_WAY = sig
-    include SHUTDOWN
-    include SOURCE with type t := t
-    include SINK with type t := t
-  end
-
   val two_way : (module TWO_WAY with type t = 't) -> ('t, two_way_ty) Resource.handler
 
   type (_, _, _) Resource.pi +=

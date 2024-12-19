@@ -183,9 +183,9 @@ type 'a t = 'a r
 module Pi = struct
   module type STREAM_SOCKET = sig
     type tag
-    include Flow.Pi.SHUTDOWN
-    include Flow.Pi.SOURCE with type t := t
-    include Flow.Pi.SINK with type t := t
+    include Flow.SHUTDOWN
+    include Flow.SOURCE with type t := t
+    include Flow.SINK with type t := t
     val close : t -> unit
   end
 
@@ -196,7 +196,7 @@ module Pi = struct
 
   module type DATAGRAM_SOCKET = sig
     type tag
-    include Flow.Pi.SHUTDOWN
+    include Flow.SHUTDOWN
     val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
     val recv : t -> Cstruct.t -> Sockaddr.datagram * int
     val close : t -> unit

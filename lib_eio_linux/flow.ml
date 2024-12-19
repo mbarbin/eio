@@ -57,7 +57,7 @@ let copy_with_rsb rsb dst =
 (* Copy by allocating a chunk from the pre-shared buffer and asking
    the source to write into it. This used when the other methods
    aren't available. *)
-let fallback_copy (type src) (module Src : Eio.Flow.Pi.SOURCE with type t = src) src dst =
+let fallback_copy (type src) (module Src : Eio.Flow.SOURCE with type t = src) src dst =
   let fallback () =
     (* No chunks available. Use regular memory instead. *)
     let buf = Cstruct.create 4096 in
