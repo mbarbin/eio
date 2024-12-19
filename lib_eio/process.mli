@@ -40,23 +40,22 @@ val pp_args : string list Fmt.t
 
 module type PROCESS = sig
   type t
-  type tag
 
   val pid : t -> int
   val await : t -> exit_status
   val signal : t -> int -> unit
 end
 
-type ('t, 'tag, 'row) process_ty =
-  < process : (module PROCESS with type t = 't and type tag = 'tag); .. > as 'row
-
-type t = Process : ('a * ('a, [> `Generic], _) process_ty) -> t [@@unboxed]
+type t =
+  | Process :
+      ('a *
+       < process : (module PROCESS with type t = 'a); .. >)
+      -> t [@@unboxed]
 (** A process. *)
 
 type process := t
 
 module type MGR = sig
-  type tag
   type t
 
   val pipe :
@@ -77,10 +76,11 @@ module type MGR = sig
     process
 end
 
-type ('t, 'tag, 'row) mgr_ty =
-  < mgr : (module MGR with type t = 't and type tag = 'tag); .. > as 'row
-
-type mgr = Mgr : ('a * ('a, [> `Generic], _) mgr_ty) -> mgr [@@unboxed]
+type mgr =
+  | Mgr :
+      ('a *
+       < mgr : (module MGR with type t = 'a); .. >)
+      -> mgr [@@unboxed]
 (** A process manager capable of spawning new processes. *)
 
 (** {2 Processes} *)
@@ -185,11 +185,6 @@ val pipe
 
 (** {2 Provider Interface} *)
 module Pi : sig
-  val process :
-    (module PROCESS with type t = 't and type tag = 'tag) ->
-    < process : (module PROCESS with type t = 't and type tag = 'tag) >
-
-  val mgr :
-    (module MGR with type t = 't and type tag = 'tag) ->
-    < mgr : (module MGR with type t = 't and type tag = 'tag) >
+  val process : (module PROCESS with type t = 'a) -> 'a -> t
+  val mgr : (module MGR with type t = 'a) -> 'a -> mgr
 end

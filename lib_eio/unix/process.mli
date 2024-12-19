@@ -6,14 +6,12 @@ open Eio.Std
 
     These extend the types in {!Eio.Process} with support for file descriptors. *)
 
-(* CR mbarbin: Because we have now different constructors with
-   different method, I think we can actually completely remove the
-   [tag] part without losing anything. *)
+type t =
+  | Process :
+      ('a *
+       < process : (module Eio.Process.PROCESS with type t = 'a); .. >)
+      -> t [@@unboxed]
 
-(* CR mbarbin: Consider systematically inlining the object definition
-   if possible, and get rid of all *_ty types definitions. *)
-
-type t = Process : ('a * ('a, [> `Generic | `Unix ], _) Eio.Process.process_ty) -> t [@@unboxed]
 type process := t
 
 module Process : sig
@@ -34,26 +32,21 @@ module type MGR_unix = sig
     process
 end
 
-type ('t, 'tag, 'row) mgr_ty =
-  < mgr : (module Eio.Process.MGR with type t = 't and type tag = 'tag)
-  ; mgr_unix :  (module MGR_unix with type t = 't and type tag = 'tag)
-  ; .. > as 'row
-
-type mgr = Mgr : ('a * ('a, [> `Generic | `Unix ], _) mgr_ty) -> mgr [@@unboxed]
+type mgr =
+  | Mgr :
+      ('a *
+       < mgr : (module Eio.Process.MGR with type t = 'a)
+       ; mgr_unix : (module MGR_unix with type t = 'a)
+       ; .. >)
+      -> mgr [@@unboxed]
 
 module Mgr : sig
   val to_generic : mgr -> Eio.Process.mgr
 end
 
 module Pi : sig
-  (* CR mbarbin: In the [Pi] module, consider returning wrapped types
-     directly rather than the inner object. This may correspond better
-     to how it is used, and simplifies the interface a great deal. *)
   val mgr_unix :
-    (module MGR_unix with type t = 't and type tag = 'tag) ->
-    < mgr : (module Eio.Process.MGR with type t = 't and type tag = 'tag)
-    ; mgr_unix : (module MGR_unix with type t = 't and type tag = 'tag)
-    >
+    (module MGR_unix with type t = 'a) -> 'a -> mgr
 end
 
 module Make_mgr (X : sig
@@ -68,7 +61,7 @@ module Make_mgr (X : sig
     executable:string ->
     string list ->
     process
-end) : MGR_unix with type t = X.t and type tag = [`Generic | `Unix]
+end) : MGR_unix with type t = X.t
 
 val spawn_unix :
     sw:Switch.t ->

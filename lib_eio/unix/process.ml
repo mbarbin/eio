@@ -69,7 +69,12 @@ let get_env = function
   | Some e -> e
   | None -> Unix.environment ()
 
-type t = Process : ('a * ('a, [> `Generic | `Unix ], _) Eio.Process.process_ty) -> t [@@unboxed]
+type t =
+  | Process :
+      ('a *
+       < process : (module Eio.Process.PROCESS with type t = 'a); .. >)
+      -> t [@@unboxed]
+
 type process = t
 
 module Process = struct
@@ -90,22 +95,24 @@ module type MGR_unix = sig
     process
 end
 
-type ('t, 'tag, 'row) mgr_ty =
-  < mgr : (module Eio.Process.MGR with type t = 't and type tag = 'tag)
-  ; mgr_unix :  (module MGR_unix with type t = 't and type tag = 'tag)
-  ; .. > as 'row
-
-type mgr = Mgr : ('a * ('a, [> `Generic | `Unix ], _) mgr_ty) -> mgr [@@unboxed]
+type mgr =
+  | Mgr :
+      ('a *
+       < mgr : (module Eio.Process.MGR with type t = 'a)
+       ; mgr_unix : (module MGR_unix with type t = 'a)
+       ; .. >)
+      -> mgr [@@unboxed]
 
 module Mgr = struct
   let to_generic (Mgr (a, ops)) = Eio.Process.Mgr (a, ops)
 end
 
 module Pi = struct
-  let mgr_unix (type t tag) (module X : MGR_unix with type t = t and type tag = tag) =
-    let o = Eio.Process.Pi.mgr (module X) in
-    let mgr = o#mgr in
-    object method mgr = mgr method mgr_unix = (module X : MGR_unix with type t = t and type tag = tag) end
+  let mgr_unix (type a) (module X : MGR_unix with type t = a) (t : a) =
+    Mgr (t, object
+           method mgr = (module X : Eio.Process.MGR with type t = a)
+           method mgr_unix = (module X : MGR_unix with type t = a)
+         end)
 end
 
 module Make_mgr (X : sig

@@ -34,8 +34,6 @@
     ]}
 *)
 
-open Eio.Std
-
 (** {2 Configuration} *)
 
 (** Actions that can be performed by mock handlers. *)
@@ -86,13 +84,25 @@ end
 
 (** Mock {!Eio.Flow} sources and sinks. *)
 module Flow : sig
+  module Mock_flow : sig
+    type t
+  end
+
   type copy_method = [
     | `Read_into                (** Use the source's [read_into] method (the default). *)
     | `Read_source_buffer       (** Use the {!Eio.Flow.Read_source_buffer} optimisation. *)
   ]
 
-  type ty = [`Generic | `Mock] Eio.Net.stream_socket_ty
-  type t = ty r
+  type t =
+    | T :
+        ('a *
+         < raw : 'a -> Mock_flow.t
+         ; shutdown : (module Eio.Flow.SHUTDOWN with type t = 'a)
+         ; source : (module Eio.Flow.SOURCE with type t = 'a)
+         ; sink : (module Eio.Flow.SINK with type t = 'a)
+         ; close : 'a -> unit
+         ; ..>)
+        -> t [@@unboxed]
 
   val make : ?pp:string Fmt.t -> string -> t
   (** [make label] is a mock Eio flow.
@@ -112,20 +122,41 @@ end
 
 (** Mock {!Eio.Net} networks and sockets. *)
 module Net : sig
-  type t = [`Generic | `Mock] Eio.Net.ty r
+  module Impl : sig
+    type t
+  end
 
-  type listening_socket = [`Generic | `Mock] Eio.Net.listening_socket_ty r
+  module Listening_socket_impl : sig
+    type t
+  end
+
+  type t =
+    | Network :
+        ('a *
+         < network : (module Eio.Net.NETWORK with type t = 'a)
+         ; raw : 'a -> Impl.t
+         ; ..>)
+        -> t [@@unboxed]
+
+  type listening_socket =
+    | Listening_socket :
+        ('a *
+         < listening_socket : (module Eio.Net.LISTENING_SOCKET with type t = 'a)
+         ; close : 'a -> unit
+         ; raw : 'a -> Listening_socket_impl.t
+         ; ..>)
+        -> listening_socket [@@unboxed]
 
   val make : string -> t
   (** [make label] is a new mock network. *)
 
-  val on_connect : t -> _ Eio.Net.stream_socket Handler.actions -> unit
+  val on_connect : t -> Eio.Net.stream_socket Handler.actions -> unit
   (** [on_connect t actions] configures what to do when a client tries to connect somewhere. *)
 
-  val on_listen : t -> _ Eio.Net.listening_socket Handler.actions -> unit
+  val on_listen : t -> Eio.Net.listening_socket Handler.actions -> unit
   (** [on_listen t actions] configures what to do when a server starts listening for incoming connections. *)
 
-  val on_datagram_socket : t -> _ Eio.Net.datagram_socket Handler.actions -> unit
+  val on_datagram_socket : t -> Eio.Net.datagram_socket Handler.actions -> unit
   (** [on_datagram_socket t actions] configures how to create datagram sockets. *)
 
   val on_getaddrinfo : t -> Eio.Net.Sockaddr.t list Handler.actions -> unit

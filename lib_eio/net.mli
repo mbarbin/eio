@@ -108,24 +108,21 @@ end
    constructor named [T], etc. *)
 
 module type STREAM_SOCKET = sig
-  type tag
   include Flow.SHUTDOWN
   include Flow.SOURCE with type t := t
   include Flow.SINK with type t := t
   val close : t -> unit
 end
 
-type ('t, 'tag, 'row) stream_socket_ty =
-  < shutdown : (module Flow.SHUTDOWN with type t = 't)
-  ; source : (module Flow.SOURCE with type t = 't)
-  ; sink : (module Flow.SINK with type t = 't)
-  ; close : 't -> unit
-  ; .. > as 'row
-
 type stream_socket =
-  | Stream_socket : ('a * ('a, [> `Generic ], _) stream_socket_ty) ->
-      stream_socket
-[@@unboxed]
+  | Stream_socket :
+      ('a *
+       < shutdown : (module Flow.SHUTDOWN with type t = 'a)
+       ; source : (module Flow.SOURCE with type t = 'a)
+       ; sink : (module Flow.SINK with type t = 'a)
+       ; close : 'a -> unit
+       ; .. >)
+      -> stream_socket [@@unboxed]
 
 module Stream_socket : sig
   val close : stream_socket -> unit
@@ -133,7 +130,6 @@ end
 
 module type LISTENING_SOCKET = sig
   type t
-  type tag
 
   val accept : t -> sw:Switch.t -> stream_socket * Sockaddr.stream
   val close : t -> unit
@@ -144,14 +140,18 @@ type listening_socket =
   | Listening_socket :
       ('a *
        < listening_socket : (module LISTENING_SOCKET with type t = 'a)
+       ; close : 'a -> unit
        ; ..>)
       -> listening_socket [@@unboxed]
+
+module Listening_socket : sig
+  val close : listening_socket -> unit
+end
 
 type 'a connection_handler = stream_socket -> Sockaddr.stream -> unit
 (** A [_ connection_handler] handles incoming connections from a listening socket. *)
 
 module type DATAGRAM_SOCKET = sig
-  type tag
   include Flow.SHUTDOWN
   val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
   val recv : t -> Cstruct.t -> Sockaddr.datagram * int
@@ -167,9 +167,12 @@ type datagram_socket =
        ; .. >)
       -> datagram_socket [@@unboxed]
 
+module Datagram_socket : sig
+  val close : datagram_socket -> unit
+end
+
 module type NETWORK = sig
   type t
-  type tag
 
   val listen :
     t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t ->
@@ -372,14 +375,14 @@ val close : [> `Close] r -> unit
 
 module Pi : sig
   val stream_socket :
-    (module STREAM_SOCKET with type t = 't) -> 't -> stream_socket
+    (module STREAM_SOCKET with type t = 'a) -> 'a -> stream_socket
 
   val datagram_socket :
-    (module DATAGRAM_SOCKET with type t = 't) -> 't -> datagram_socket
+    (module DATAGRAM_SOCKET with type t = 'a) -> 'a -> datagram_socket
 
   val listening_socket :
-    (module LISTENING_SOCKET with type t = 't) -> 't -> listening_socket
+    (module LISTENING_SOCKET with type t = 'a) -> 'a -> listening_socket
 
   val network :
-    (module NETWORK with type t = 't) -> 't -> t
+    (module NETWORK with type t = 'a) -> 'a -> t
 end

@@ -1,16 +1,11 @@
 open Eio.Std
 
-type ty = [`Generic | `Mock] Eio.Net.ty
-type t = ty r
-
 module Impl = struct
-  type tag = [`Generic]
-
   type t = {
     label : string;
-    on_listen : tag Eio.Net.listening_socket_ty r Handler.t;
-    on_connect : tag Eio.Net.stream_socket_ty r Handler.t;
-    on_datagram_socket : tag Eio.Net.datagram_socket_ty r Handler.t;
+    on_listen : Eio.Net.listening_socket Handler.t;
+    on_connect : Eio.Net.stream_socket Handler.t;
+    on_datagram_socket : Eio.Net.datagram_socket Handler.t;
     on_getaddrinfo : Eio.Net.Sockaddr.t list Handler.t;
     on_getnameinfo : (string * string) Handler.t;
   }
@@ -33,13 +28,13 @@ module Impl = struct
   let listen t ~reuse_addr:_ ~reuse_port:_ ~backlog:_ ~sw addr =
     traceln "%s: listen on %a" t.label Eio.Net.Sockaddr.pp addr;
     let socket = Handler.run t.on_listen in
-    Switch.on_release sw (fun () -> Eio.Resource.close socket);
+    Switch.on_release sw (fun () -> Eio.Net.Listening_socket.close socket);
     socket
 
   let connect t ~sw addr =
     traceln "%s: connect to %a" t.label Eio.Net.Sockaddr.pp addr;
     let socket = Handler.run t.on_connect in
-    Switch.on_release sw (fun () -> Eio.Flow.close socket);
+    Switch.on_release sw (fun () -> Eio.Net.Stream_socket.close socket);
     socket
 
   let datagram_socket t ~reuse_addr:_ ~reuse_port:_ ~sw addr =
@@ -49,7 +44,7 @@ module Impl = struct
      | `UdpV6 -> traceln "%s: datagram_socket UDPv6" t.label
     );
     let socket = Handler.run t.on_datagram_socket in
-    Switch.on_release sw (fun () -> Eio.Flow.close socket);
+    Switch.on_release sw (fun () -> Eio.Net.Datagram_socket.close socket);
     socket
 
   let getaddrinfo t ~service node =
@@ -59,49 +54,49 @@ module Impl = struct
   let getnameinfo t sockaddr =
     traceln "%s: getnameinfo %a" t.label Eio.Net.Sockaddr.pp sockaddr;
     Handler.run t.on_getnameinfo
-
-  type (_, _, _) Eio.Resource.pi += Raw : ('t, 't -> t, ty) Eio.Resource.pi
-  let raw (Eio.Resource.T (t, ops)) = Eio.Resource.get ops Raw t
 end
 
+type t =
+  | Network :
+      ('a *
+       < network : (module Eio.Net.NETWORK with type t = 'a)
+       ; raw : 'a -> Impl.t
+       ; ..>)
+      -> t [@@unboxed]
+
+let raw (Network (t, ops)) = ops#raw t
+
 let make : string -> t =
-  let super = Eio.Net.Pi.network (module Impl) in
-  let handler = Eio.Resource.handler (
-      H (Impl.Raw, Fun.id) ::
-      Eio.Resource.bindings super
-    ) in
-  fun label -> Eio.Resource.T (Impl.make label, handler)
+  let ops =
+    object
+      method network = (module Impl : Eio.Net.NETWORK with type t = Impl.t)
+      method raw = Fun.id
+    end
+  in
+  fun label -> Network (Impl.make label, ops)
 
-let on_connect (t:t) actions =
-  let t = Impl.raw t in
-  let as_socket x = (x :> [`Generic] Eio.Net.stream_socket_ty r) in
-  Handler.seq t.on_connect (List.map (Action.map as_socket) actions)
+let on_connect (t : t) actions =
+  let t = raw t in
+  Handler.seq t.on_connect (List.map (Action.map Fun.id) actions)
 
-let on_listen (t:t) actions =
-  let t = Impl.raw t in
-  let as_socket x = (x :> [`Generic] Eio.Net.listening_socket_ty r) in
-  Handler.seq t.on_listen (List.map (Action.map as_socket) actions)
+let on_listen (t : t) actions =
+  let t = raw t in
+  Handler.seq t.on_listen (List.map (Action.map Fun.id) actions)
 
-let on_datagram_socket (t:t) (actions : _ r Handler.actions) =
-  let t = Impl.raw t in
-  let as_socket x = (x :> [`Generic] Eio.Net.datagram_socket_ty r) in
-  Handler.seq t.on_datagram_socket (List.map (Action.map as_socket) actions)
+let on_datagram_socket (t : t) actions =
+  let t = raw t in
+  Handler.seq t.on_datagram_socket (List.map (Action.map Fun.id) actions)
 
-let on_getaddrinfo (t:t) actions = Handler.seq (Impl.raw t).on_getaddrinfo actions
+let on_getaddrinfo (t:t) actions = Handler.seq (raw t).on_getaddrinfo actions
 
-let on_getnameinfo (t:t) actions = Handler.seq (Impl.raw t).on_getnameinfo actions
+let on_getnameinfo (t:t) actions = Handler.seq (raw t).on_getnameinfo actions
 
-type listening_socket_ty = [`Generic | `Mock] Eio.Net.listening_socket_ty
-type listening_socket = listening_socket_ty r
-
-module Listening_socket = struct
+module Listening_socket_impl = struct
   type t = {
     label : string;
     listening_addr : Eio.Net.Sockaddr.stream;
     on_accept : (Flow.t * Eio.Net.Sockaddr.stream) Handler.t;
   }
-
-  type tag = [`Generic]
 
   let make ?(listening_addr = `Tcp (Eio.Net.Ipaddr.V4.any, 0)) label =
     {
@@ -116,27 +111,36 @@ module Listening_socket = struct
       let socket, addr = Handler.run t.on_accept in
       Flow.attach_to_switch (socket : Flow.t) sw;
       traceln "%s: accepted connection from %a" t.label Eio.Net.Sockaddr.pp addr;
-      (socket :> tag Eio.Net.stream_socket_ty r), addr
+      Flow.as_stream_socket socket, addr
 
   let close t =
     traceln "%s: closed" t.label
 
   let listening_addr { listening_addr; _ } = listening_addr
-
-  type (_, _, _) Eio.Resource.pi += Type : ('t, 't -> t, listening_socket_ty) Eio.Resource.pi
-  let raw (Eio.Resource.T (t, ops)) = Eio.Resource.get ops Type t
 end
 
-let listening_socket_handler =
-  Eio.Resource.handler @@
-  Eio.Resource.bindings (Eio.Net.Pi.listening_socket (module Listening_socket)) @ [
-    H (Listening_socket.Type, Fun.id);
-  ]
+type listening_socket =
+  | Listening_socket :
+      ('a *
+       < listening_socket : (module Eio.Net.LISTENING_SOCKET with type t = 'a)
+       ; close : 'a -> unit
+       ; raw : 'a -> Listening_socket_impl.t
+       ; ..>)
+      -> listening_socket [@@unboxed]
+
+let raw_listening_socket (Listening_socket (t, ops)) = ops#raw t
 
 let listening_socket ?listening_addr label : listening_socket =
-  Eio.Resource.T (Listening_socket.make ?listening_addr label, listening_socket_handler)
+  let ops =
+    object
+      method close = Listening_socket_impl.close
+      method listening_socket = (module Listening_socket_impl : Eio.Net.LISTENING_SOCKET with type t = Listening_socket_impl.t)
+      method raw = Fun.id
+    end
+  in
+  Listening_socket (Listening_socket_impl.make ?listening_addr label, ops)
 
 let on_accept l actions =
-  let r = Listening_socket.raw l in
+  let r = raw_listening_socket l in
   let as_accept_pair x = (x :> Flow.t * Eio.Net.Sockaddr.stream) in
   Handler.seq r.on_accept (List.map (Action.map as_accept_pair) actions)

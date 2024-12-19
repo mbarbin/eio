@@ -160,24 +160,21 @@ module Sockaddr = struct
 end
 
 module type STREAM_SOCKET = sig
-  type tag
   include Flow.SHUTDOWN
   include Flow.SOURCE with type t := t
   include Flow.SINK with type t := t
   val close : t -> unit
 end
 
-type ('t, 'tag, 'row) stream_socket_ty =
-  < shutdown : (module Flow.SHUTDOWN with type t = 't)
-  ; source : (module Flow.SOURCE with type t = 't)
-  ; sink : (module Flow.SINK with type t = 't)
-  ; close : 't -> unit
-  ; .. > as 'row
-
 type stream_socket =
-  | Stream_socket : ('a * ('a, [> `Generic ], _) stream_socket_ty) ->
-      stream_socket
-[@@unboxed]
+  | Stream_socket :
+      ('a *
+       < shutdown : (module Flow.SHUTDOWN with type t = 'a)
+       ; source : (module Flow.SOURCE with type t = 'a)
+       ; sink : (module Flow.SINK with type t = 'a)
+       ; close : 'a -> unit
+       ; .. >)
+      -> stream_socket [@@unboxed]
 
 module Stream_socket = struct
   let close (Stream_socket (t, ops)) = ops#close t
@@ -185,7 +182,6 @@ end
 
 module type LISTENING_SOCKET = sig
   type t
-  type tag
 
   val accept : t -> sw:Switch.t -> stream_socket * Sockaddr.stream
   val close : t -> unit
@@ -196,13 +192,17 @@ type listening_socket =
   | Listening_socket :
       ('a *
        < listening_socket : (module LISTENING_SOCKET with type t = 'a)
+       ; close : 'a -> unit
        ; ..>)
       -> listening_socket [@@unboxed]
+
+module Listening_socket = struct
+  let close (Listening_socket (t, ops)) = ops#close t
+end
 
 type 'a connection_handler = stream_socket -> Sockaddr.stream -> unit
 
 module type DATAGRAM_SOCKET = sig
-  type tag
   include Flow.SHUTDOWN
   val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
   val recv : t -> Cstruct.t -> Sockaddr.datagram * int
@@ -218,9 +218,12 @@ type datagram_socket =
        ; .. >)
       -> datagram_socket [@@unboxed]
 
+module Datagram_socket = struct
+  let close (Datagram_socket (t, ops)) = ops#close t
+end
+
 module type NETWORK = sig
   type t
-  type tag
 
   val listen : t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t -> Sockaddr.stream -> listening_socket
   val connect : t -> sw:Switch.t -> Sockaddr.stream -> stream_socket
@@ -240,8 +243,7 @@ type t =
     Network :
       ('a *
        < network : (module NETWORK with type t = 'a)
-       ; ..
-       >)
+       ; ..>)
       -> t [@@unboxed]
 
 module Pi = struct
@@ -276,7 +278,7 @@ module Pi = struct
        end)
 end
 
-let accept ~sw (type tag) (Listening_socket (t, ops)) =
+let accept ~sw (Listening_socket (t, ops)) =
   let module X = (val ops#listening_socket) in
   X.accept t ~sw
 
@@ -297,7 +299,7 @@ let accept_fork ~sw (t : listening_socket) ~on_error handle =
          )
     )
 
-let listening_addr (type tag) (Listening_socket (t, ops)) =
+let listening_addr (Listening_socket (t, ops)) =
   let module X = (val ops#listening_socket) in
   X.listening_addr t
 
@@ -309,12 +311,12 @@ let recv (Datagram_socket (t, ops)) buf =
   let module X = (val ops#datagram_socket) in
   X.recv t buf
 
-let listen (type tag) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : t) =
+let listen ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : t) =
   let (Network (t, ops)) = t in
   let module X = (val ops#network) in
   X.listen t ~reuse_addr ~reuse_port ~backlog ~sw
 
-let connect (type tag) ~sw (t : t) addr =
+let connect ~sw (t : t) addr =
   let (Network (t, ops)) = t in
   let module X = (val ops#network) in
   try X.connect t ~sw addr
@@ -322,13 +324,13 @@ let connect (type tag) ~sw (t : t) addr =
     let bt = Printexc.get_raw_backtrace () in
     Exn.reraise_with_context ex bt "connecting to %a" Sockaddr.pp addr
 
-let datagram_socket (type tag) ?(reuse_addr=false) ?(reuse_port=false) ~sw (t : t) addr =
+let datagram_socket ?(reuse_addr=false) ?(reuse_port=false) ~sw (t : t) addr =
   let (Network (t, ops)) = t in
   let module X = (val ops#network) in
   let addr = (addr :> [Sockaddr.datagram | `UdpV4 | `UdpV6]) in
   X.datagram_socket t ~reuse_addr ~reuse_port ~sw addr
 
-let getaddrinfo (type tag) ?(service="") (t : t) hostname =
+let getaddrinfo ?(service="") (t : t) hostname =
   let (Network (t, ops)) = t in
   let module X = (val ops#network) in
   X.getaddrinfo t ~service hostname
@@ -347,7 +349,7 @@ let getaddrinfo_datagram ?service t hostname =
       | _ -> None
     )
 
-let getnameinfo (type tag) (t : t) sockaddr =
+let getnameinfo (t : t) sockaddr =
   let (Network (t, ops)) = t in
   let module X = (val ops#network) in
   X.getnameinfo t sockaddr

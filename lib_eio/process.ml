@@ -34,22 +34,21 @@ let () =
 
 module type PROCESS = sig
   type t
-  type tag
 
   val pid : t -> int
   val await : t -> exit_status
   val signal : t -> int -> unit
 end
 
-type ('t, 'tag, 'row) process_ty =
-  < process : (module PROCESS with type t = 't and type tag = 'tag); .. > as 'row
-
-type t = Process : ('a * ('a, [> `Generic], _) process_ty) -> t [@@unboxed]
+type t =
+  | Process :
+      ('a *
+       < process : (module PROCESS with type t = 'a); .. >)
+      -> t [@@unboxed]
 
 type process = t
 
 module type MGR = sig
-  type tag
   type t
 
   val pipe :
@@ -70,17 +69,25 @@ module type MGR = sig
     process
 end
 
-type ('t, 'tag, 'row) mgr_ty =
- < mgr : (module MGR with type t = 't and type tag = 'tag); .. > as 'row
+type mgr =
+  | Mgr :
+      ('a *
+       < mgr : (module MGR with type t = 'a); .. >)
+      -> mgr [@@unboxed]
 
-type mgr = Mgr : ('a * ('a, [> `Generic], _) mgr_ty) -> mgr [@@unboxed]
 module Pi = struct
 
-  let process (type t tag) (module X : PROCESS with type t = t and type tag = tag) =
-    object method process = (module X : PROCESS with type t = t and type tag = tag) end
+  let process (type a) (module X : PROCESS with type t = a) (t : a) =
+    Process
+      (t, object
+         method process = (module X : PROCESS with type t = a)
+       end)
 
-  let mgr (type t tag) (module X : MGR with type t = t and type tag = tag) =
-    object method mgr = (module X : MGR with type t = t and type tag = tag) end
+  let mgr (type a) (module X : MGR with type t = a) (t : a) =
+    Mgr
+      (t, object
+         method mgr = (module X : MGR with type t = a)
+       end)
 end
 
 let bad_char = function
