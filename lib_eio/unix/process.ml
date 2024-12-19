@@ -16,30 +16,33 @@ let resolve_program name =
 let read_of_fd ~sw ~default ~to_close = function
   | None -> default
   | Some (Eio.Flow.Source f) ->
+    (* CR mbarbin: Not clear what to do there. That's a problem. Perhaps the
+       generic one must have an option fd in its type? *)
     match Resource.fd_opt f with
     | Some fd -> fd
     | None ->
       let r, w = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy (Eio.Flow.Source f) (Eio.Flow.Sink w);
-          Eio.Flow.close w
+          Eio.Flow.copy (Eio.Flow.Source f) (Types.Sink.to_generic w);
+          Types.Sink.close w
         );
-      let r = Resource.fd r in
+      let r = Types.Source.fd r in
       to_close := r :: !to_close;
       r
 
 let write_of_fd ~sw ~default ~to_close = function
   | None -> default
   | Some (Eio.Flow.Sink f) ->
+    (* CR mbarbin: Not clear what to do there. That's a problem. *)
     match Resource.fd_opt f with
     | Some fd -> fd
     | None ->
       let r, w = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy (Eio.Flow.Source r) (Eio.Flow.Sink f);
-          Eio.Flow.close r
+          Eio.Flow.copy (Types.Source.to_generic r) (Eio.Flow.Sink f);
+          Types.Source.close r
         );
-      let w = Resource.fd w in
+      let w = Types.Sink.fd w in
       to_close := w :: !to_close;
       w
 
@@ -131,8 +134,7 @@ end) = struct
   type t = X.t
 
   let pipe _ ~sw =
-    (Private.pipe sw :> ([Eio.Resource.close_ty | Eio.Flow.source_ty] r *
-    [Eio.Resource.close_ty | Eio.Flow.sink_ty] r))
+    Private.pipe sw
 
   let spawn v ~sw ?cwd ?stdin ?stdout ?stderr ?env ?executable args =
     let executable = get_executable executable ~args in
