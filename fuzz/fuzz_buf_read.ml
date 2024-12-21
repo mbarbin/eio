@@ -46,9 +46,8 @@ module Mock_flow = struct
   let read_methods = []
 end
 
-let mock_flow =
-  let ops = Eio.Flow.Pi.source (module Mock_flow) in
-  fun chunks -> Eio.Resource.T (ref chunks, ops)
+let mock_flow chunks =
+  Eio.Flow.Pi.source (module Mock_flow) (ref chunks)
 
 module Model = struct
   type t = string ref
@@ -249,7 +248,7 @@ let catch f x =
 let random chunks ops =
   let model = Model.of_chunks chunks in
   let chunks_len = String.length !model in
-  let r = Buf_read.of_flow (Eio.Flow.Source (mock_flow chunks)) ~initial_size ~max_size in
+  let r = Buf_read.of_flow (mock_flow chunks) ~initial_size ~max_size in
   if debug then print_endline "*** start ***";
   let check_eq (Op (pp, a, b)) =
     if debug then (

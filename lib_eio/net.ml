@@ -159,81 +159,116 @@ module Sockaddr = struct
       Format.fprintf f "udp:%a:%d" Ipaddr.pp_for_uri addr port
 end
 
-module type STREAM_SOCKET = sig
-  include Flow.SHUTDOWN
-  include Flow.SOURCE with type t := t
-  include Flow.SINK with type t := t
-  val close : t -> unit
-end
-
-type stream_socket =
-  | Stream_socket :
-      ('a *
-       < shutdown : (module Flow.SHUTDOWN with type t = 'a)
-       ; source : (module Flow.SOURCE with type t = 'a)
-       ; sink : (module Flow.SINK with type t = 'a)
-       ; close : 'a -> unit
-       ; .. >)
-      -> stream_socket [@@unboxed]
-
 module Stream_socket = struct
-  let close (Stream_socket (t, ops)) = ops#close t
+
+  module type S = sig
+    include Flow.SHUTDOWN
+    include Flow.SOURCE with type t := t
+    include Flow.SINK with type t := t
+    val close : t -> unit
+  end
+
+  type t =
+    | T :
+        ('a *
+         < shutdown : (module Flow.SHUTDOWN with type t = 'a)
+         ; source : (module Flow.SOURCE with type t = 'a)
+         ; sink : (module Flow.SINK with type t = 'a)
+         ; close : 'a -> unit
+         ; .. >)
+        -> t [@@unboxed]
+
+  let close (T (t, ops)) = ops#close t
+
+  module Pi = struct
+    let make (type t) (module X : S with type t = t) (t : t) =
+      T
+        (t, object
+           method close = X.close
+           method shutdown = (module X : Flow.SHUTDOWN with type t = t)
+           method source = (module X : Flow.SOURCE with type t = t)
+           method sink = (module X : Flow.SINK with type t = t)
+         end)
+  end
 end
-
-module type LISTENING_SOCKET = sig
-  type t
-
-  val accept : t -> sw:Switch.t -> stream_socket * Sockaddr.stream
-  val close : t -> unit
-  val listening_addr : t -> Sockaddr.stream
-end
-
-type listening_socket =
-  | Listening_socket :
-      ('a *
-       < listening_socket : (module LISTENING_SOCKET with type t = 'a)
-       ; close : 'a -> unit
-       ; ..>)
-      -> listening_socket [@@unboxed]
 
 module Listening_socket = struct
-  let close (Listening_socket (t, ops)) = ops#close t
-end
 
-type 'a connection_handler = stream_socket -> Sockaddr.stream -> unit
+  module type S = sig
+    type t
 
-module type DATAGRAM_SOCKET = sig
-  include Flow.SHUTDOWN
-  val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
-  val recv : t -> Cstruct.t -> Sockaddr.datagram * int
-  val close : t -> unit
-end
+    val accept : t -> sw:Switch.t -> Stream_socket.t * Sockaddr.stream
+    val close : t -> unit
+    val listening_addr : t -> Sockaddr.stream
+  end
 
-type datagram_socket =
-  | Datagram_socket :
+  type t =
+  | T :
       ('a *
-       < shutdown : (module Flow.SHUTDOWN with type t = 'a)
-       ; datagram_socket : (module DATAGRAM_SOCKET with type t = 'a)
+       < listening_socket : (module S with type t = 'a)
        ; close : 'a -> unit
-       ; .. >)
-      -> datagram_socket [@@unboxed]
+       ; ..>)
+      -> t [@@unboxed]
+
+  (* CR mbarbin: Could be using [S.close] instead and simplify [t]. *)
+  let close (T (t, ops)) = ops#close t
+
+  module Pi = struct
+    let make (type t) (module X : S with type t = t) (t : t) =
+      T
+        (t, object
+           method close = X.close
+           method listening_socket = (module X : S with type t = t)
+         end)
+  end
+end
+
+type 'a connection_handler = Stream_socket.t -> Sockaddr.stream -> unit
 
 module Datagram_socket = struct
-  let close (Datagram_socket (t, ops)) = ops#close t
+
+  module type S = sig
+    include Flow.SHUTDOWN
+    val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
+    val recv : t -> Cstruct.t -> Sockaddr.datagram * int
+    val close : t -> unit
+  end
+
+  type t =
+    | T :
+        ('a *
+         < shutdown : (module Flow.SHUTDOWN with type t = 'a)
+         ; datagram_socket : (module S with type t = 'a)
+         ; close : 'a -> unit
+         ; .. >)
+        -> t [@@unboxed]
+
+  (* CR mbarbin: Could be using [S.close] instead and simplify [t]. *)
+  let close (T (t, ops)) = ops#close t
+
+  module Pi = struct
+    let make (type t) (module X : S with type t = t) (t : t) =
+      T
+        (t, object
+           method shutdown = (module X : Flow.SHUTDOWN with type t = t)
+           method datagram_socket = (module X : S with type t = t)
+           method close = X.close
+         end)
+  end
 end
 
 module type NETWORK = sig
   type t
 
-  val listen : t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t -> Sockaddr.stream -> listening_socket
-  val connect : t -> sw:Switch.t -> Sockaddr.stream -> stream_socket
+  val listen : t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t -> Sockaddr.stream -> Listening_socket.t
+  val connect : t -> sw:Switch.t -> Sockaddr.stream -> Stream_socket.t
   val datagram_socket :
     t
     -> reuse_addr:bool
     -> reuse_port:bool
     -> sw:Switch.t
     -> [Sockaddr.datagram | `UdpV4 | `UdpV6]
-    -> datagram_socket
+    -> Datagram_socket.t
 
   val getaddrinfo : t -> service:string -> string -> Sockaddr.t list
   val getnameinfo : t -> Sockaddr.t -> (string * string)
@@ -247,30 +282,6 @@ type t =
       -> t [@@unboxed]
 
 module Pi = struct
-  let stream_socket (type t) (module X : STREAM_SOCKET with type t = t) (t : t) =
-    Stream_socket
-      (t, object
-         method close = X.close
-         method shutdown = (module X : Flow.SHUTDOWN with type t = t)
-         method source = (module X : Flow.SOURCE with type t = t)
-         method sink = (module X : Flow.SINK with type t = t)
-       end)
-
-  let datagram_socket (type t) (module X : DATAGRAM_SOCKET with type t = t) (t : t) =
-    Datagram_socket
-      (t, object
-         method shutdown = (module X : Flow.SHUTDOWN with type t = t)
-         method datagram_socket = (module X : DATAGRAM_SOCKET with type t = t)
-         method close = X.close
-       end)
-
-  let listening_socket (type t) (module X : LISTENING_SOCKET with type t = t) (t : t) =
-    Listening_socket
-      (t, object
-         method close = X.close
-         method listening_socket = (module X : LISTENING_SOCKET with type t = t)
-       end)
-
   let network (type t) (module X : NETWORK with type t = t) (t : t) =
     Network
       (t, object
@@ -278,11 +289,11 @@ module Pi = struct
        end)
 end
 
-let accept ~sw (Listening_socket (t, ops)) =
+let accept ~sw (Listening_socket.T (t, ops)) =
   let module X = (val ops#listening_socket) in
   X.accept t ~sw
 
-let accept_fork ~sw (t : listening_socket) ~on_error handle =
+let accept_fork ~sw (t : Listening_socket.t) ~on_error handle =
   let child_started = ref false in
   let flow, addr = accept ~sw t in
   Fun.protect ~finally:(fun () -> if !child_started = false then Stream_socket.close flow)
@@ -299,15 +310,15 @@ let accept_fork ~sw (t : listening_socket) ~on_error handle =
          )
     )
 
-let listening_addr (Listening_socket (t, ops)) =
+let listening_addr (Listening_socket.T (t, ops)) =
   let module X = (val ops#listening_socket) in
   X.listening_addr t
 
-let send (Datagram_socket (t, ops)) ?dst bufs =
+let send (Datagram_socket.T (t, ops)) ?dst bufs =
   let module X = (val ops#datagram_socket) in
   X.send t ?dst bufs
 
-let recv (Datagram_socket (t, ops)) buf =
+let recv (Datagram_socket.T (t, ops)) buf =
   let module X = (val ops#datagram_socket) in
   X.recv t buf
 

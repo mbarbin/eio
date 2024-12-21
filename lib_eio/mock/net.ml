@@ -3,9 +3,9 @@ open Eio.Std
 module Impl = struct
   type t = {
     label : string;
-    on_listen : Eio.Net.listening_socket Handler.t;
-    on_connect : Eio.Net.stream_socket Handler.t;
-    on_datagram_socket : Eio.Net.datagram_socket Handler.t;
+    on_listen : Eio.Net.Listening_socket.t Handler.t;
+    on_connect : Eio.Net.Stream_socket.t Handler.t;
+    on_datagram_socket : Eio.Net.Datagram_socket.t Handler.t;
     on_getaddrinfo : Eio.Net.Sockaddr.t list Handler.t;
     on_getnameinfo : (string * string) Handler.t;
   }
@@ -122,7 +122,7 @@ end
 type listening_socket =
   | Listening_socket :
       ('a *
-       < listening_socket : (module Eio.Net.LISTENING_SOCKET with type t = 'a)
+       < listening_socket : (module Eio.Net.Listening_socket.S with type t = 'a)
        ; close : 'a -> unit
        ; raw : 'a -> Listening_socket_impl.t
        ; ..>)
@@ -134,7 +134,7 @@ let listening_socket ?listening_addr label : listening_socket =
   let ops =
     object
       method close = Listening_socket_impl.close
-      method listening_socket = (module Listening_socket_impl : Eio.Net.LISTENING_SOCKET with type t = Listening_socket_impl.t)
+      method listening_socket = (module Listening_socket_impl : Eio.Net.Listening_socket.S with type t = Listening_socket_impl.t)
       method raw = Fun.id
     end
   in

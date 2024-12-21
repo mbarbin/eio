@@ -11,6 +11,11 @@ open Std
 type 'a read_method = ..
 (** Sources can offer a list of ways to read them, in order of preference. *)
 
+(* CR mbarbin: Refactor the type names for consistency, same as in
+   unix eio. For example, source becomes Source.t, SOURCE becomes
+   Source.S, etc. Consider moving them to their own file if at all
+   possible (and reexport here). *)
+
 module type SOURCE = sig
   type t
   val read_methods : t read_method list
@@ -117,6 +122,7 @@ val buffer_sink : Buffer.t -> sink
 
 (** {2 Bidirectional streams} *)
 
+(* CR mbarbin: Maybe this is what should be named [Flow.t] under the new scheme. *)
 type two_way =
   |  Two_way :
       ('a *
@@ -125,6 +131,11 @@ type two_way =
        ; shutdown : (module SHUTDOWN with type t = 'a)
        ; ..>)
       -> two_way [@@unboxed]
+
+module Cast : sig
+  val as_source : two_way -> source
+  val as_sink : two_way -> sink
+end
 
 val shutdown : two_way -> shutdown_command -> unit
 (** [shutdown t cmd] indicates that the caller has finished reading or writing [t]
@@ -138,9 +149,11 @@ val shutdown : two_way -> shutdown_command -> unit
     Flows are usually attached to switches and closed automatically when the switch
     finishes. However, it can be useful to close them sooner manually in some cases. *)
 
+(* CR mbarbin: Remove. *)
 val close : [> `Close] r -> unit
 (** Alias of {!Resource.close}. *)
 
+(* CR mbarbin: Review, think about the names for consistency. *)
 module Closable : sig
   type closable_source = Closable_source : ('a * < source : (module SOURCE with type t = 'a); close : 'a -> unit; ..>) -> closable_source [@@unboxed]
   type closable_sink = Closable_sink : ('a * < sink : (module SINK with type t = 'a); close : 'a -> unit; ..>) -> closable_sink [@@unboxed]
@@ -158,6 +171,7 @@ val close_sink : Closable.closable_sink -> unit
 (** {2 Provider Interface} *)
 
 module Pi : sig
+  (* CR mbarbin: Once the module are refactored, move this into their own module. E.g. [Source.Pi.make]. *)
   val source : (module SOURCE with type t = 't) -> 't -> source
   val sink : (module SINK with type t = 't) -> 't -> sink
   val shutdown : (module SHUTDOWN with type t = 't) -> 't -> shutdown

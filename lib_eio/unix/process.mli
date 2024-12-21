@@ -19,7 +19,24 @@ module Process : sig
 end
 
 module type MGR_unix = sig
-  include Eio.Process.MGR
+  type t
+
+  val pipe :
+    t ->
+    sw:Switch.t ->
+    Source.t * Sink.t
+
+  val spawn :
+    t ->
+    sw:Switch.t ->
+    ?cwd:Eio.Path.t ->
+    ?stdin:Source_with_fd_opt.t ->
+    ?stdout:Sink_with_fd_opt.t ->
+    ?stderr:Sink_with_fd_opt.t ->
+    ?env:string array ->
+    ?executable:string ->
+    string list ->
+    Eio.Process.t
 
   val spawn_unix :
     t ->
@@ -45,6 +62,7 @@ module Mgr : sig
 end
 
 module Pi : sig
+  val process : (module Eio.Process.PROCESS with type t = 'a) -> 'a -> process
   val mgr_unix :
     (module MGR_unix with type t = 'a) -> 'a -> mgr
 end

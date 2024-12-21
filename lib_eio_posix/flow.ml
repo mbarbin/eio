@@ -1,5 +1,3 @@
-open Eio.Std
-
 module Fd = Eio_unix.Fd
 
 let float_of_time s ns =
@@ -72,8 +70,8 @@ module Impl = struct
     with End_of_file -> ()
 
   let copy t ~src =
-    let Eio.Flow.Source (Eio.Resource.T (src_t, ops)) = src in
-    let module Src = (val (Eio.Resource.get ops Eio.Flow.Pi.Source)) in
+    let Eio.Flow.Source (src_t, ops) = src in
+    let module Src = (val ops#source) in
     let rec aux = function
       | Eio.Flow.Read_source_buffer rsb :: _ -> copy_with_rsb (rsb src_t) t
       | _ :: xs -> aux xs
@@ -122,12 +120,7 @@ module Impl = struct
   let close = Eio_unix.Fd.close
 end
 
-let handler = Eio_unix.Pi.flow_handler (module Impl)
-
-let of_fd fd =
-  let r = Eio.Resource.T (fd, handler) in
-  (r : [`Unix_fd | Eio_unix.Net.stream_socket_ty | Eio.File.rw_ty] r :>
-     [< `Unix_fd | Eio_unix.Net.stream_socket_ty | Eio.File.rw_ty] r)
+let of_fd fd = Eio_unix.Flow.Pi.make (module Impl) fd
 
 module Secure_random = struct
   type t = unit
@@ -139,6 +132,4 @@ module Secure_random = struct
   let read_methods = []
 end
 
-let secure_random =
-  let ops = Eio.Flow.Pi.source (module Secure_random) in
-  Eio.Resource.T ((), ops)
+let secure_random = Eio.Flow.Pi.source (module Secure_random) ()

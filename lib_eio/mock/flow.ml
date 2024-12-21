@@ -132,7 +132,7 @@ type t =
 
 let raw (T (t, ops)) = ops#raw t
 
-let as_stream_socket (T (a, ops)) = Eio.Net.Stream_socket (a, ops)
+let as_stream_socket (T (a, ops)) = Eio.Net.Stream_socket.T (a, ops)
 
 let attach_to_switch t sw =
   let t = raw t in

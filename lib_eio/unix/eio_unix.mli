@@ -14,29 +14,14 @@ type Eio.Exn.Backend.t += Unix_error of Unix.error * string * string
 module Fd = Fd
 (** A safe wrapper for {!Unix.file_descr}. *)
 
-(** Eio resources backed by an OS file descriptor. *)
-module Resource : sig
-  type 'a t = ([> `Unix_fd] as 'a) Eio.Resource.t
-  (** Resources that have FDs are tagged with [`Unix_fd]. *)
-
-  type ('t, _, _) Eio.Resource.pi += T : ('t, 't -> Fd.t, [> `Unix_fd]) Eio.Resource.pi
-
-  val fd : _ t -> Fd.t
-  (** [fd t] returns the FD being wrapped by a resource. *)
-
-  val fd_opt : _ Eio.Resource.t -> Fd.t option
-  (** [fd_opt t] returns the FD being wrapped by a generic resource, if any.
-
-      This just probes [t] using {!extension-FD}. *)
-end
+module Source = Source
+module Source_with_fd_opt = Source_with_fd_opt
+module Sink = Sink
+module Sink_with_fd_opt = Sink_with_fd_opt
+module Flow = Flow
 
 module Net = Net
 (** Extended network API with support for file descriptors. *)
-
-type source_ty = [`Unix_fd | Eio.Resource.close_ty | Eio.Flow.source_ty]
-type sink_ty   = [`Unix_fd | Eio.Resource.close_ty | Eio.Flow.sink_ty]
-type 'a source = ([> source_ty] as 'a) r
-type 'a sink = ([> sink_ty] as 'a) r
 
 val await_readable : Unix.file_descr -> unit
 (** [await_readable fd] blocks until [fd] is readable (or has an error). *)
@@ -58,7 +43,7 @@ val run_in_systhread : ?label:string -> (unit -> 'a) -> 'a
 
     @param label The operation name to use in trace output. *)
 
-val pipe : Switch.t -> source_ty r * sink_ty r
+val pipe : Switch.t -> Source.t * Sink.t
 (** [pipe sw] returns a connected pair of flows [src] and [sink]. Data written to [sink]
     can be read from [src].
     Note that, like all FDs created by Eio, they are both marked as close-on-exec by default. *)
@@ -97,7 +82,7 @@ module Private : sig
     | Await_readable : Unix.file_descr -> unit Effect.t      (** See {!await_readable} *)
     | Await_writable : Unix.file_descr -> unit Effect.t      (** See {!await_writable} *)
     | Get_monotonic_clock : Eio.Time.Mono.ty r Effect.t
-    | Pipe : Eio.Switch.t -> (source_ty r * sink_ty r) Effect.t    (** See {!pipe} *)
+    | Pipe : Eio.Switch.t -> (Source.t * Sink.t) Effect.t    (** See {!pipe} *)
 
   module Rcfd = Rcfd
 
@@ -108,5 +93,3 @@ module Private : sig
   val read_link : Fd.t option -> string -> string
   val read_link_unix : Unix.file_descr option -> string -> string
 end
-
-module Pi = Pi

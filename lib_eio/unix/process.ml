@@ -15,34 +15,31 @@ let resolve_program name =
 
 let read_of_fd ~sw ~default ~to_close = function
   | None -> default
-  | Some (Eio.Flow.Source f) ->
-    (* CR mbarbin: Not clear what to do there. That's a problem. Perhaps the
-       generic one must have an option fd in its type? *)
-    match Resource.fd_opt f with
-    | Some fd -> fd
+  | Some (Source_with_fd_opt.T (f, ops) as source) ->
+    match ops#fd with
+    | Some fd -> fd f
     | None ->
       let r, w = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy (Eio.Flow.Source f) (Types.Sink.to_generic w);
-          Types.Sink.close w
+          Eio.Flow.copy (Source_with_fd_opt.Cast.to_generic source) (Sink.Cast.to_generic w);
+          Sink.close w
         );
-      let r = Types.Source.fd r in
+      let r = Source.fd r in
       to_close := r :: !to_close;
       r
 
 let write_of_fd ~sw ~default ~to_close = function
   | None -> default
-  | Some (Eio.Flow.Sink f) ->
-    (* CR mbarbin: Not clear what to do there. That's a problem. *)
-    match Resource.fd_opt f with
-    | Some fd -> fd
+  | Some (Sink_with_fd_opt.T (f, ops) as sink) ->
+    match ops#fd with
+    | Some fd -> fd f
     | None ->
       let r, w = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy (Types.Source.to_generic r) (Eio.Flow.Sink f);
-          Types.Source.close r
+          Eio.Flow.copy (Source.Cast.to_generic r) (Sink_with_fd_opt.Cast.to_generic sink);
+          Source.close r
         );
-      let w = Types.Sink.fd w in
+      let w = Sink.fd w in
       to_close := w :: !to_close;
       w
 
@@ -85,8 +82,24 @@ module Process = struct
 end
 
 module type MGR_unix = sig
-  include Eio.Process.MGR
+  type t
 
+  val pipe :
+    t ->
+    sw:Switch.t ->
+    Source.t * Sink.t
+
+  val spawn :
+    t ->
+    sw:Switch.t ->
+    ?cwd:Eio.Path.t ->
+    ?stdin:Source_with_fd_opt.t ->
+    ?stdout:Sink_with_fd_opt.t ->
+    ?stderr:Sink_with_fd_opt.t ->
+    ?env:string array ->
+    ?executable:string ->
+    string list ->
+    Eio.Process.t
   val spawn_unix :
     t ->
     sw:Switch.t ->
@@ -111,9 +124,38 @@ module Mgr = struct
 end
 
 module Pi = struct
+  let process (type a) (module X : Eio.Process.PROCESS with type t = a) (t : a) =
+    Process (t, object method process = (module X : Eio.Process.PROCESS with type t = a) end)
+
   let mgr_unix (type a) (module X : MGR_unix with type t = a) (t : a) =
+    let module X_mgr = struct
+      type t = X.t
+
+      let spawn
+        t
+        ~sw
+        ?cwd
+        ?stdin
+        ?stdout
+        ?stderr
+        ?env
+        ?executable args =
+        X.spawn
+          t
+          ~sw
+          ?cwd
+          ?stdin:(Option.map Source_with_fd_opt.of_generic stdin)
+          ?stdout:(Option.map Sink_with_fd_opt.of_generic stdout)
+          ?stderr:(Option.map Sink_with_fd_opt.of_generic stderr)
+          ?env
+          ?executable args
+
+      let pipe t ~sw =
+        let (T r), (T w) = X.pipe t ~sw in
+        (Eio.Flow.Closable.Closable_source r, Eio.Flow.Closable.Closable_sink w)
+    end in
     Mgr (t, object
-           method mgr = (module X : Eio.Process.MGR with type t = a)
+           method mgr = (module X_mgr : Eio.Process.MGR with type t = a)
            method mgr_unix = (module X : MGR_unix with type t = a)
          end)
 end

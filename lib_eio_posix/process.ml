@@ -15,9 +15,7 @@ module Process_impl = struct
   let signal = Low_level.Process.signal
 end
 
-let process =
-  let handler = Eio.Process.Pi.process (module Process_impl) in
-  fun proc -> Eio_unix.Process.Process (proc, handler)
+let process proc = Eio_unix.Process.Pi.process (module Process_impl) proc
 
 module Impl = struct
   module T = struct
@@ -46,5 +44,4 @@ module Impl = struct
 end
 
 let mgr : Eio_unix.Process.mgr =
-  let h = Eio_unix.Process.Pi.mgr_unix (module Impl) in
-  Eio_unix.Process.Mgr ((), h)
+  Eio_unix.Process.Pi.mgr_unix (module Impl) ()

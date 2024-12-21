@@ -34,7 +34,7 @@ module Listening_socket = struct
       | Unix.ADDR_UNIX path         -> `Unix path
       | Unix.ADDR_INET (host, port) -> `Tcp (Eio_unix.Net.Ipaddr.of_unix host, port)
     in
-    let flow = (Flow.of_fd client :> _ Eio.Net.stream_socket) in
+    let flow = (Flow.of_fd client |> Eio_unix.Flow.Cast.as_stream_socket) in
     flow, client_addr
 
   let listening_addr { fd; _ } =
@@ -42,14 +42,10 @@ module Listening_socket = struct
       (fun fd -> Eio_unix.Net.sockaddr_of_unix_stream (Unix.getsockname fd))
 end
 
-let listening_handler = Eio_unix.Pi.listening_socket_handler (module Listening_socket)
-
 let listening_socket ~hook fd =
-  Eio.Resource.T (Listening_socket.make ~hook fd, listening_handler)
+  Eio_unix.Net.Listening_socket.Pi.make (module Listening_socket) (Listening_socket.make ~hook fd)
 
 module Datagram_socket = struct
-  type tag = [`Generic | `Unix]
-
   type t = Eio_unix.Fd.t
 
   let close = Fd.close
@@ -76,10 +72,8 @@ module Datagram_socket = struct
     | Unix.Unix_error (code, name, arg) -> raise (Err.wrap code name arg)
 end
 
-let datagram_handler = Eio_unix.Pi.datagram_handler (module Datagram_socket)
-
 let datagram_socket fd =
-  Eio.Resource.T (fd, datagram_handler)
+  Eio_unix.Net.Datagram_socket.Pi.make (module Datagram_socket) fd
 
 (* https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml *)
 let getaddrinfo ~service node =
@@ -136,7 +130,7 @@ let listen ~reuse_addr ~reuse_port ~backlog ~sw (listen_addr : Eio.Net.Sockaddr.
       Unix.bind fd addr;
       Unix.listen fd backlog;
     );
-  (listening_socket ~hook sock :> _ Eio.Net.listening_socket_ty r)
+  listening_socket ~hook sock
 
 let connect ~sw connect_addr =
   let socket_type, addr =
@@ -149,7 +143,7 @@ let connect ~sw connect_addr =
   let sock = Low_level.socket ~sw (socket_domain_of connect_addr) socket_type 0 in
   try
     Low_level.connect sock addr;
-    (Flow.of_fd sock :> _ Eio_unix.Net.stream_socket)
+    (Flow.of_fd sock |> Eio_unix.Flow.Cast.as_unix_stream_socket)
   with Unix.Unix_error (code, name, arg) -> raise (Err.wrap code name arg)
 
 let create_datagram_socket ~reuse_addr ~reuse_port ~sw saddr =
@@ -170,22 +164,17 @@ let create_datagram_socket ~reuse_addr ~reuse_port ~sw saddr =
 
 module Impl = struct
   type t = unit
-  type tag = [`Generic | `Unix]
 
   let listen () = listen
 
-  let connect () ~sw addr =
-    let socket = connect ~sw addr in
-    (socket :> [`Generic | `Unix] Eio.Net.stream_socket_ty r)
+  let connect () ~sw addr = connect ~sw addr
 
   let datagram_socket () ~reuse_addr ~reuse_port ~sw saddr =
-    let socket = create_datagram_socket ~reuse_addr ~reuse_port ~sw saddr in
-    (socket :> [`Generic | `Unix] Eio.Net.datagram_socket_ty r)
+    create_datagram_socket ~reuse_addr ~reuse_port ~sw saddr
 
   let getaddrinfo () = getaddrinfo
   let getnameinfo () = Eio_unix.Net.getnameinfo
 end
 
-let v : Impl.tag Eio.Net.ty r =
-  let handler = Eio.Net.Pi.network (module Impl) in
-  Eio.Resource.T ((), handler)
+let v : Eio_unix.Net.t =
+  Eio_unix.Net.Pi.make (module Impl) ()

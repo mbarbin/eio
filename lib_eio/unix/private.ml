@@ -1,7 +1,6 @@
 [@@@alert "-unstable"]
 
 open Eio.Std
-open Types
 
 type _ Effect.t +=
   | Await_readable : Unix.file_descr -> unit Effect.t

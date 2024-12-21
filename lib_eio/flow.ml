@@ -78,6 +78,7 @@ module Closable = struct
   type closable_source = Closable_source : ('a * < source : (module SOURCE with type t = 'a); close : 'a -> unit; ..>) -> closable_source [@@unboxed]
   type closable_sink = Closable_sink : ('a * < sink : (module SINK with type t = 'a); close : 'a -> unit; ..>) -> closable_sink  [@@unboxed]
 
+  (* CR mbarbin: Adopt the [Cast] naming scheme. *)
   let source (Closable_source s) = Source s
   let sink (Closable_sink s) = Sink s
 end
@@ -125,8 +126,9 @@ module Cstruct_source = struct
 
 end
 
-let cstruct_source data =
-  Pi.source (module Cstruct_source) (Cstruct_source.create data)
+let cstruct_source =
+  let ops = Pi.source (module Cstruct_source) in
+  fun data -> ops (Cstruct_source.create data)
 
 module String_source = struct
   type t = {
@@ -146,8 +148,9 @@ module String_source = struct
   let create s = { s; offset = 0 }
 end
 
-let string_source s =
-  Pi.source (module String_source) (String_source.create s)
+let string_source : string -> source =
+  let ops = Pi.source (module String_source) in
+  fun s -> ops (String_source.create s)
 
 let single_write (Sink (t, ops)) bufs =
   let module X = (val ops#sink) in
@@ -180,9 +183,15 @@ module Buffer_sink = struct
   let copy t ~src = Pi.simple_copy ~single_write t ~src
 end
 
-let buffer_sink b =
-  Pi.sink (module Buffer_sink) b
+let buffer_sink =
+  let ops = Pi.sink (module Buffer_sink) in
+  fun b -> ops b
 
 let shutdown (Two_way (t, ops)) cmd =
   let module X = (val ops#shutdown) in
   X.shutdown t cmd
+
+module Cast = struct
+  let as_source (Two_way t) = Source t
+  let as_sink (Two_way t) = Sink t
+end

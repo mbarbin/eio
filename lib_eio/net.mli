@@ -105,70 +105,89 @@ end
 (** {2 Types} *)
 
 (* CR mbarbin: We could go and rename this Strean_socket.[S], have the
-   constructor named [T], etc. *)
-
-module type STREAM_SOCKET = sig
-  include Flow.SHUTDOWN
-  include Flow.SOURCE with type t := t
-  include Flow.SINK with type t := t
-  val close : t -> unit
-end
-
-type stream_socket =
-  | Stream_socket :
-      ('a *
-       < shutdown : (module Flow.SHUTDOWN with type t = 'a)
-       ; source : (module Flow.SOURCE with type t = 'a)
-       ; sink : (module Flow.SINK with type t = 'a)
-       ; close : 'a -> unit
-       ; .. >)
-      -> stream_socket [@@unboxed]
+   constructor named [T], etc. Do a pass to make this more consistent
+   through the refactored parts. *)
 
 module Stream_socket : sig
-  val close : stream_socket -> unit
-end
 
-module type LISTENING_SOCKET = sig
-  type t
+  module type S = sig
+    include Flow.SHUTDOWN
+    include Flow.SOURCE with type t := t
+    include Flow.SINK with type t := t
+    val close : t -> unit
+  end
 
-  val accept : t -> sw:Switch.t -> stream_socket * Sockaddr.stream
+  type t =
+    | T :
+        ('a *
+         < shutdown : (module Flow.SHUTDOWN with type t = 'a)
+         ; source : (module Flow.SOURCE with type t = 'a)
+         ; sink : (module Flow.SINK with type t = 'a)
+         ; close : 'a -> unit
+         ; .. >)
+        -> t [@@unboxed]
+
+  (* CR mbarbin: when the dust settles on the refactoring, define
+     common interfaces, such as this close there, that would be
+     defined somewhere so we can simply include them with type t. *)
   val close : t -> unit
-  val listening_addr : t -> Sockaddr.stream
-end
 
-type listening_socket =
-  | Listening_socket :
-      ('a *
-       < listening_socket : (module LISTENING_SOCKET with type t = 'a)
-       ; close : 'a -> unit
-       ; ..>)
-      -> listening_socket [@@unboxed]
+  module Pi : sig
+    val make : (module S with type t = 'a) -> 'a -> t
+  end
+end
 
 module Listening_socket : sig
-  val close : listening_socket -> unit
+
+  module type S = sig
+    type t
+
+    val accept : t -> sw:Switch.t -> Stream_socket.t * Sockaddr.stream
+    val close : t -> unit
+    val listening_addr : t -> Sockaddr.stream
+  end
+
+  type t =
+    | T :
+        ('a *
+         < listening_socket : (module S with type t = 'a)
+         ; close : 'a -> unit
+         ; ..>)
+        -> t [@@unboxed]
+
+  val close : t -> unit
+
+  module Pi : sig
+    val make : (module S with type t = 'a) -> 'a -> t
+  end
 end
 
-type 'a connection_handler = stream_socket -> Sockaddr.stream -> unit
+type 'a connection_handler = Stream_socket.t -> Sockaddr.stream -> unit
 (** A [_ connection_handler] handles incoming connections from a listening socket. *)
 
-module type DATAGRAM_SOCKET = sig
-  include Flow.SHUTDOWN
-  val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
-  val recv : t -> Cstruct.t -> Sockaddr.datagram * int
-  val close : t -> unit
-end
-
-type datagram_socket =
-  | Datagram_socket :
-      ('a *
-       < shutdown : (module Flow.SHUTDOWN with type t = 'a)
-       ; datagram_socket : (module DATAGRAM_SOCKET with type t = 'a)
-       ; close : 'a -> unit
-       ; .. >)
-      -> datagram_socket [@@unboxed]
-
 module Datagram_socket : sig
-  val close : datagram_socket -> unit
+
+  module type S = sig
+    include Flow.SHUTDOWN
+    val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
+    val recv : t -> Cstruct.t -> Sockaddr.datagram * int
+    val close : t -> unit
+  end
+
+  type t =
+    | T :
+        ('a *
+         < shutdown : (module Flow.SHUTDOWN with type t = 'a)
+         ; datagram_socket : (module S with type t = 'a)
+         ; close : 'a -> unit
+         ; .. >)
+        -> t [@@unboxed]
+
+  val close : t -> unit
+
+  module Pi : sig
+    val make : (module S with type t = 'a) -> 'a -> t
+  end
 end
 
 module type NETWORK = sig
@@ -176,9 +195,9 @@ module type NETWORK = sig
 
   val listen :
     t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t ->
-    Sockaddr.stream -> listening_socket
+    Sockaddr.stream -> Listening_socket.t
 
-  val connect : t -> sw:Switch.t -> Sockaddr.stream -> stream_socket
+  val connect : t -> sw:Switch.t -> Sockaddr.stream -> Stream_socket.t
 
   val datagram_socket :
     t
@@ -186,7 +205,7 @@ module type NETWORK = sig
     -> reuse_port:bool
     -> sw:Switch.t
     -> [Sockaddr.datagram | `UdpV4 | `UdpV6]
-    -> datagram_socket
+    -> Datagram_socket.t
 
   val getaddrinfo : t -> service:string -> string -> Sockaddr.t list
   val getnameinfo : t -> Sockaddr.t -> (string * string)
@@ -202,7 +221,7 @@ type t =
 
 (** {2 Out-bound Connections} *)
 
-val connect : sw:Switch.t -> t -> Sockaddr.stream -> stream_socket
+val connect : sw:Switch.t -> t -> Sockaddr.stream -> Stream_socket.t
 (** [connect ~sw t addr] is a new socket connected to remote address [addr].
 
     The new socket will be closed when [sw] finishes, unless closed manually first. *)
@@ -212,7 +231,7 @@ val with_tcp_connect :
   host:string ->
   service:string ->
   t ->
-  (stream_socket -> 'b) ->
+  (Stream_socket.t -> 'b) ->
   'b
 (** [with_tcp_connect ~host ~service t f] creates a tcp connection [conn] to [host] and [service] and executes 
     [f conn].
@@ -235,7 +254,7 @@ val with_tcp_connect :
 
 val listen :
   ?reuse_addr:bool -> ?reuse_port:bool -> backlog:int -> sw:Switch.t ->
-  t -> Sockaddr.stream -> listening_socket
+  t -> Sockaddr.stream -> Listening_socket.t
 (** [listen ~sw ~backlog t addr] is a new listening socket bound to local address [addr].
 
     The new socket will be closed when [sw] finishes, unless closed manually first.
@@ -251,8 +270,8 @@ val listen :
 
 val accept :
   sw:Switch.t ->
-  listening_socket ->
-  stream_socket * Sockaddr.stream
+  Listening_socket.t ->
+  Stream_socket.t * Sockaddr.stream
 (** [accept ~sw socket] waits until a new connection is ready on [socket] and returns it.
 
     The new socket will be closed automatically when [sw] finishes, if not closed earlier.
@@ -260,9 +279,9 @@ val accept :
 
 val accept_fork :
   sw:Switch.t ->
-  listening_socket ->
+  Listening_socket.t ->
   on_error:(exn -> unit) ->
-  stream_socket connection_handler ->
+  Stream_socket.t connection_handler ->
   unit
 (** [accept_fork ~sw ~on_error socket fn] accepts a connection and handles it in a new fiber.
 
@@ -280,7 +299,7 @@ val accept_fork :
                     [on_error] is not called for {!Cancel.Cancelled} exceptions,
                     which do not need to be reported. *)
 
-val listening_addr : listening_socket -> Sockaddr.stream
+val listening_addr : Listening_socket.t -> Sockaddr.stream
 
 (** {2 Running Servers} *)
 
@@ -289,8 +308,8 @@ val run_server :
   ?additional_domains:(Domain_manager.t * int) ->
   ?stop:'a Promise.t ->
   on_error:(exn -> unit) ->
-  listening_socket ->
-  stream_socket connection_handler ->
+  Listening_socket.t ->
+  Stream_socket.t connection_handler ->
   'a
 (** [run_server ~on_error sock connection_handler] establishes a concurrent socket server [s].
 
@@ -322,7 +341,7 @@ val datagram_socket :
   -> sw:Switch.t
   -> t
   -> [< Sockaddr.datagram | `UdpV4 | `UdpV6]
-  -> datagram_socket
+  -> Datagram_socket.t
   (** [datagram_socket ~sw t addr] creates a new datagram socket bound to [addr]. The new 
       socket will be closed when [sw] finishes. 
 
@@ -334,12 +353,12 @@ val datagram_socket :
       @param reuse_addr Set the {!Unix.SO_REUSEADDR} socket option.
       @param reuse_port Set the {!Unix.SO_REUSEPORT} socket option. *)
 
-val send : datagram_socket -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
+val send : Datagram_socket.t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
 (** [send sock buf] sends the data in [buf] using the the datagram socket [sock].
 
     @param dst If [sock] isn't connected, this provides the destination. *)
 
-val recv : datagram_socket -> Cstruct.t -> Sockaddr.datagram * int
+val recv : Datagram_socket.t -> Cstruct.t -> Sockaddr.datagram * int
 (** [recv sock buf] receives data from the socket [sock] putting it in [buf]. The number of bytes received is 
     returned along with the sender address and port. If the [buf] is too small then excess bytes may be discarded
     depending on the type of the socket the message is received from. *)
@@ -374,15 +393,6 @@ val close : [> `Close] r -> unit
 (** {2 Provider Interface} *)
 
 module Pi : sig
-  val stream_socket :
-    (module STREAM_SOCKET with type t = 'a) -> 'a -> stream_socket
-
-  val datagram_socket :
-    (module DATAGRAM_SOCKET with type t = 'a) -> 'a -> datagram_socket
-
-  val listening_socket :
-    (module LISTENING_SOCKET with type t = 'a) -> 'a -> listening_socket
-
   val network :
     (module NETWORK with type t = 'a) -> 'a -> t
 end

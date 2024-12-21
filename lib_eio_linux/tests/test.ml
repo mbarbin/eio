@@ -9,7 +9,7 @@ let () =
 
 let read_one_byte ~sw r =
   Fiber.fork_promise ~sw (fun () ->
-      let r = Eio_unix.Resource.fd r in
+      let r = Eio_unix.Source.fd r in
       Eio_linux.Low_level.await_readable r;
       Eio_unix.Fd.use_exn "read" r @@ fun r ->
       let b = Bytes.create 1 in
@@ -24,7 +24,7 @@ let test_poll_add () =
   let r, w = Eio_unix.pipe sw in
   let thread = read_one_byte ~sw r in
   Fiber.yield ();
-  let w = Eio_unix.Resource.fd w in
+  let w = Eio_unix.Sink.fd w in
   Eio_linux.Low_level.await_writable w;
   let sent =
     Eio_unix.Fd.use_exn "write" w @@ fun w ->
@@ -40,7 +40,7 @@ let test_poll_add_busy () =
   let a = read_one_byte ~sw r in
   let b = read_one_byte ~sw r in
   Fiber.yield ();
-  let w = Eio_unix.Resource.fd w in
+  let w = Eio_unix.Sink.fd w in
   let sent =
     Eio_unix.Fd.use_exn "write" w @@ fun w ->
     Unix.write w (Bytes.of_string "!!") 0 2

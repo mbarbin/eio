@@ -23,7 +23,7 @@ let parse_headers r =
   !len
 
 let handle_connection conn _addr =
-  Eio.Buf_write.with_flow (Eio.Flow.Sink conn) @@ fun w ->
+  Eio.Buf_write.with_flow conn @@ fun w ->
   let rec requests r =
     let _req = Eio.Buf_read.line r in
     let len = parse_headers r in
