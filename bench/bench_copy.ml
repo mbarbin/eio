@@ -11,7 +11,7 @@ let run_client sock =
     (fun () ->
        let chunk = Cstruct.create chunk_size in
        for _ = 1 to n_chunks do
-         Eio.Flow.write (Eio.Flow.Sink sock) [chunk]
+         Eio.Flow.write (Eio_unix.Net.Stream_socket.Cast.as_sink sock) [chunk]
        done;
        Eio.Flow.shutdown (Eio.Flow.Two_way sock) `Send
     )

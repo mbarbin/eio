@@ -21,7 +21,7 @@ let read_of_fd ~sw ~default ~to_close = function
     | None ->
       let r, w = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy (Source_with_fd_opt.Cast.to_generic source) (Sink.Cast.to_generic w);
+          Eio.Flow.copy (Source_with_fd_opt.Cast.as_generic source) (Sink.Cast.as_generic w);
           Sink.close w
         );
       let r = Source.fd r in
@@ -36,7 +36,7 @@ let write_of_fd ~sw ~default ~to_close = function
     | None ->
       let r, w = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy (Source.Cast.to_generic r) (Sink_with_fd_opt.Cast.to_generic sink);
+          Eio.Flow.copy (Source.Cast.as_generic r) (Sink_with_fd_opt.Cast.as_generic sink);
           Source.close r
         );
       let w = Sink.fd w in
@@ -78,7 +78,7 @@ type t =
 type process = t
 
 module Process = struct
-  let to_generic (Process p) = Eio.Process.Process p
+  let as_generic (Process p) = Eio.Process.Process p
 end
 
 module type MGR_unix = sig
@@ -120,7 +120,7 @@ type mgr =
       -> mgr [@@unboxed]
 
 module Mgr = struct
-  let to_generic (Mgr (a, ops)) = Eio.Process.Mgr (a, ops)
+  let as_generic (Mgr (a, ops)) = Eio.Process.Mgr (a, ops)
 end
 
 module Pi = struct
@@ -190,7 +190,7 @@ end) = struct
       1, stdout_fd, `Blocking;
       2, stderr_fd, `Blocking;
     ] in
-    X.spawn_unix v ~sw ?cwd ~env ~fds ~executable args |> Process.to_generic
+    X.spawn_unix v ~sw ?cwd ~env ~fds ~executable args |> Process.as_generic
 
   let spawn_unix = X.spawn_unix
 end

@@ -10,6 +10,10 @@ type t =
       -> t [@@unboxed]
 
 module Cast : sig
+  val as_source : t -> Eio.Flow.source
+  val as_sink : t -> Eio.Flow.sink
+  val as_unix_source : t -> Source.t
+  val as_unix_sink : t -> Sink.t
   val as_generic_stream_socket : t -> Eio.Net.Stream_socket.t
 end
 

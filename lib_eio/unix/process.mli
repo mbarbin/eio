@@ -15,7 +15,7 @@ type t =
 type process := t
 
 module Process : sig
-  val to_generic : t -> Eio.Process.t
+  val as_generic : t -> Eio.Process.t
 end
 
 module type MGR_unix = sig
@@ -58,7 +58,7 @@ type mgr =
       -> mgr [@@unboxed]
 
 module Mgr : sig
-  val to_generic : mgr -> Eio.Process.mgr
+  val as_generic : mgr -> Eio.Process.mgr
 end
 
 module Pi : sig

@@ -127,6 +127,11 @@ module Stream_socket : sig
          ; .. >)
         -> t [@@unboxed]
 
+  module Cast : sig
+    val as_source : t -> Flow.source
+    val as_sink : t -> Flow.sink
+  end
+
   (* CR mbarbin: when the dust settles on the refactoring, define
      common interfaces, such as this close there, that would be
      defined somewhere so we can simply include them with type t. *)

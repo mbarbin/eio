@@ -34,7 +34,7 @@ module Listening_socket = struct
       | Unix.ADDR_UNIX path         -> `Unix path
       | Unix.ADDR_INET (host, port) -> `Tcp (Eio_unix.Net.Ipaddr.of_unix host, port)
     in
-    let flow = (Flow.of_fd client |> Eio_unix.Flow.Cast.as_stream_socket) in
+    let flow = (Flow.of_fd client |> Eio_unix.Flow.Cast.as_unix_stream_socket) in
     flow, client_addr
 
   let listening_addr { fd; _ } =

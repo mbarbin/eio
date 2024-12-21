@@ -32,4 +32,4 @@ let main ~dm mgr =
 
 let () =
   Eio_main.run @@ fun env ->
-  main ~dm:env#domain_mgr (Eio_unix.Process.Mgr.to_generic env#process_mgr)
+  main ~dm:env#domain_mgr (Eio_unix.Process.Mgr.as_generic env#process_mgr)

@@ -59,14 +59,14 @@ let test_copy () =
   let from_pipe, to_pipe = Eio_unix.pipe sw in
   let buffer = Buffer.create 20 in
   Fiber.both
-    (fun () -> Eio.Flow.copy (Eio.Flow.Source from_pipe) (Eio.Flow.buffer_sink buffer))
+    (fun () -> Eio.Flow.copy (Eio_unix.Source.Cast.as_generic from_pipe) (Eio.Flow.buffer_sink buffer))
     (fun () ->
-       Eio.Flow.copy (Eio.Flow.string_source msg) (Eio.Flow.Sink to_pipe);
-       Eio.Flow.copy (Eio.Flow.string_source msg) (Eio.Flow.Sink to_pipe);
-       Eio.Flow.close to_pipe
+       Eio.Flow.copy (Eio.Flow.string_source msg) (Eio_unix.Sink.Cast.as_generic to_pipe);
+       Eio.Flow.copy (Eio.Flow.string_source msg) (Eio_unix.Sink.Cast.as_generic to_pipe);
+       Eio_unix.Sink.close to_pipe
     );
   Alcotest.(check string) "Copy correct" (msg ^ msg) (Buffer.contents buffer);
-  Eio.Flow.close from_pipe
+  Eio_unix.Source.close from_pipe
 
 (* Write a string via 2 pipes. The copy from the 1st to 2nd pipe will be optimised and so tests a different code-path. *)
 let test_direct_copy () =
@@ -80,25 +80,25 @@ let test_direct_copy () =
   Switch.run (fun sw ->
       Fiber.fork ~sw (fun () ->
         Trace.log "copy1";
-        Eio.Flow.copy (Eio.Flow.Source from_pipe1) (Eio.Flow.Sink to_pipe2);
-        Eio.Flow.close to_pipe2);
+        Eio.Flow.copy (Eio_unix.Source.Cast.as_generic from_pipe1) (Eio_unix.Sink.Cast.as_generic to_pipe2);
+        Eio_unix.Sink.close to_pipe2);
       Fiber.fork ~sw (fun () ->
         Trace.log "copy2";
-        Eio.Flow.copy (Eio.Flow.Source from_pipe2) to_output);
-      Eio.Flow.copy (Eio.Flow.string_source msg) (Eio.Flow.Sink to_pipe1);
-      Eio.Flow.close to_pipe1;
+        Eio.Flow.copy (Eio_unix.Source.Cast.as_generic from_pipe2) to_output);
+      Eio.Flow.copy (Eio.Flow.string_source msg) (Eio_unix.Sink.Cast.as_generic to_pipe1);
+      Eio_unix.Sink.close to_pipe1;
     );
   Alcotest.(check string) "Copy correct" msg (Buffer.contents buffer);
-  Eio.Flow.close from_pipe1;
-  Eio.Flow.close from_pipe2
+  Eio_unix.Source.close from_pipe1;
+  Eio_unix.Source.close from_pipe2
 
 (* Read and write using IO vectors rather than the fixed buffers. *)
 let test_iovec () =
   Eio_linux.run ~queue_depth:4 @@ fun _stdenv ->
   Switch.run @@ fun sw ->
   let from_pipe, to_pipe = Eio_unix.pipe sw in
-  let from_pipe = Eio_unix.Resource.fd from_pipe in
-  let to_pipe = Eio_unix.Resource.fd to_pipe in
+  let from_pipe = Eio_unix.Source.fd from_pipe in
+  let to_pipe = Eio_unix.Sink.fd to_pipe in
   let message = Cstruct.of_string "Got [   ] and [   ]" in
   let rec recv = function
     | [] -> ()
@@ -123,7 +123,7 @@ let test_no_sqe () =
     for _ = 1 to 8 do
       Fiber.fork ~sw (fun () ->
           let r, _w = Eio_unix.pipe sw in
-          ignore (Eio.Flow.single_read (Eio.Flow.Source r) (Cstruct.create 1) : int);
+          ignore (Eio.Flow.single_read (Eio_unix.Source.Cast.as_generic r) (Cstruct.create 1) : int);
           assert false
         )
     done;

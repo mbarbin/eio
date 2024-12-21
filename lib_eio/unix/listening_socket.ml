@@ -1,7 +1,18 @@
+module type S = sig
+  type t
+
+  val accept : t -> sw:Eio.Switch.t -> Stream_socket.t * Eio.Net.Sockaddr.stream
+  val close : t -> unit
+  val listening_addr : t -> Eio.Net.Sockaddr.stream
+  val fd : t -> Fd.t
+end
+
+
 type t =
   | T :
       ('a *
        < listening_socket : (module Eio.Net.Listening_socket.S with type t = 'a)
+       ; unix_listening_socket : (module S with type t = 'a)
        ; close : 'a -> unit
        ; fd : 'a -> Fd.t
        ; ..>)
@@ -14,18 +25,23 @@ end
 let close (T (a, ops)) = ops#close a
 let fd (T (a, ops)) = ops#fd a
 
-module type S = sig
-  include Eio.Net.Listening_socket.S
-
-  val fd : t -> Fd.t
-end
-
 module Pi = struct
-  let make (type a) (module X : S with type t = a) (t : a) =
-    T
-      (t, object
-         method listening_socket = (module X : Eio.Net.Listening_socket.S with type t = a)
+  (* CR mbarbin: Apply the staged scheme consistently all over. *)
+  let make (type a) (module X : S with type t = a) =
+    let module Generic = struct
+      include X
+
+      let accept t ~sw =
+        let stream_socket, stream = X.accept t ~sw in
+        Stream_socket.Cast.as_generic_stream_socket stream_socket, stream
+    end in
+    let ops =
+      object
+         method listening_socket = (module Generic : Eio.Net.Listening_socket.S with type t = a)
+         method unix_listening_socket = (module X : S with type t = a)
          method close = X.close
          method fd = X.fd
-       end)
+       end
+      in
+    fun (t : a) -> T (t, ops)
 end

@@ -11,9 +11,9 @@ let handle_client flow addr =
   (* We use a buffered reader because we may need to combine multiple reads
      to get a single line (or we may get multiple lines in a single read,
      although here we only use the first one). *)
-  let from_client = Read.of_flow (Eio.Flow.Source flow) ~max_size:100 in
+  let from_client = Read.of_flow (Eio.Net.Stream_socket.Cast.as_source flow) ~max_size:100 in
   traceln "Received: %S" (Read.line from_client);
-  Eio.Flow.copy_string "OK" (Eio.Flow.Sink flow)
+  Eio.Flow.copy_string "OK" (Eio.Net.Stream_socket.Cast.as_sink flow)
 
 (* Accept incoming client connections on [socket].
    We can handle multiple clients at the same time.

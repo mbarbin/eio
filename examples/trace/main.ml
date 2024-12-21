@@ -48,14 +48,14 @@ let main net =
        traceln "server: starting";
        let c, _addr = Eio.Net.accept ~sw s in
        traceln "server: got connection from client";
-       let msg = Eio.Flow.read_all (Eio.Flow.Source c) in
+       let msg = Eio.Flow.read_all (Eio.Net.Stream_socket.Cast.as_source c) in
        traceln "server: read %S from socket" msg
     )
     (fun () ->
        traceln "client: connecting socket...";
        let c = Eio.Net.connect ~sw net addr in
-       Eio.Flow.copy_string "Hello" (Eio.Flow.Sink c);
-       Eio.Flow.close c
+       Eio.Flow.copy_string "Hello" (Eio.Net.Stream_socket.Cast.as_sink c);
+       Eio.Net.Stream_socket.close c
     )
 
 (* Enable tracing then run the [main] and [trace] fibers. *)

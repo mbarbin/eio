@@ -6,7 +6,7 @@ type t =
 
 module Cast :
 sig
-  val to_generic : t -> Eio.Flow.sink
+  val as_generic : t -> Eio.Flow.sink
 end
 
 val of_generic : Eio.Flow.sink -> t

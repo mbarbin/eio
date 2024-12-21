@@ -7,7 +7,7 @@ type t =
       -> t [@@unboxed]
 
 module Cast : sig
-  val to_generic : t -> Eio.Flow.source
+  val as_generic : t -> Eio.Flow.source
 end
 
 val close : t -> unit
