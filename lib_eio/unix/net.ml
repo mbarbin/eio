@@ -27,7 +27,7 @@ let sockaddr_of_unix_datagram = function
     let host = Ipaddr.of_unix host in
     `Udp (host, port)
 
-let send_msg (Flow.T (t, ops)) ?(fds=[]) bufs =
+let send_msg (Stream_socket.T (t, ops)) ?(fds=[]) bufs =
   let module X = (val ops#stream_socket) in
   let rec aux ~fds bufs =
     let sent = X.send_msg t ~fds bufs in
@@ -37,7 +37,7 @@ let send_msg (Flow.T (t, ops)) ?(fds=[]) bufs =
   in
   aux ~fds bufs
 
-let recv_msg_with_fds (Flow.T (t, ops)) ~sw ~max_fds bufs =
+let recv_msg_with_fds (Stream_socket.T (t, ops)) ~sw ~max_fds bufs =
   let module X = (val ops#stream_socket) in
   X.recv_msg_with_fds t ~sw ~max_fds bufs
 

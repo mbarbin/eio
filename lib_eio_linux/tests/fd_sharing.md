@@ -45,12 +45,12 @@ mentioning it.
     (fun () ->
        Promise.await ready;
        traceln "Domain 0 closing FD";
-       Eio.Flow.close r;
+       Eio_unix.Source.close r;
        Fiber.yield ();
        traceln "Domain 0 closed FD; waking domain 1";
        Mutex.unlock m;
        (* Allow the read to complete. *)
-       Eio.Flow.close w
+       Eio_unix.Sink.close w
     );;
 +Domain 1 enqueuing read on FD
 +Waiting for domain 0...

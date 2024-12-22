@@ -101,4 +101,4 @@ let pp f t = Rcfd.pp f t.fd
 module K = Eio.Resource_store.Key (struct
   type nonrec 'a t = 'a -> t
 end)
-let key = K.key
+let key = { Eio.Resource_store.key = K.key }

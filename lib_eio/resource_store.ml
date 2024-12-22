@@ -58,3 +58,5 @@ let find : type a data. a t -> key:(a, data) key -> data option = fun t ~key ->
   | None -> None
   | Some b -> Some b.data
 ;;
+
+type 'b accessor = { key : 'a. ('a, 'a -> 'b) key }

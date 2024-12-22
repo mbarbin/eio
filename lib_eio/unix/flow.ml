@@ -34,7 +34,7 @@ end
 module Pi = struct
   let make (type a) (module X : S with type t = a) (t : a) =
     let resource_store = Eio.Resource_store.create () in
-    Eio.Resource_store.set resource_store ~key:Fd.key ~data:X.fd;
+    Eio.Resource_store.set resource_store ~key:Fd.key.key ~data:X.fd;
     let module X_no_fd = struct
       include X
       let copy t ~src =

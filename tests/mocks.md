@@ -19,9 +19,9 @@ let stdout = Eio_mock.Flow.make "stdout"
     `Return "chunk2";
     `Raise End_of_file
   ];
-  Eio.Flow.copy stdin stdout;
-  Eio.Flow.close stdin;
-  Eio.Flow.shutdown stdout `Send;;
+  Eio.Flow.copy (Eio_mock.Flow.Cast.as_source stdin) (Eio_mock.Flow.Cast.as_sink stdout);
+  Eio_mock.Flow.close stdin;
+  Eio.Flow.shutdown (Eio_mock.Flow.Cast.as_flow stdout) `Send;;
 +stdin: read "chunk1"
 +stdout: wrote "chunk1"
 +stdin: read "chunk2"

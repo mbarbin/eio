@@ -40,8 +40,10 @@ let with_tmp_file dir id fn =
   Eio.Path.with_open_out path ~create:(`Exclusive 0o600) @@ fun file ->
   Fun.protect
     (fun () ->
-       Eio.Flow.copy_string id file;
-       fn (Option.get (Eio_unix.Resource.fd_opt file))
+       let Eio.File.Rw (t, ops) = file in
+       let fd = Eio.File.Rw.find_store file Eio_unix.Fd.key |> Option.get in
+       Eio.Flow.copy_string id (Eio.File.Rw.to_sink file);
+       fn fd
     )
     ~finally:(fun () -> Eio.Path.unlink path)
 ```
@@ -56,7 +58,7 @@ Using a socket-pair:
   with_tmp_file env#cwd "bar" @@ fun fd2 ->
   Switch.run @@ fun sw ->
   let r, w = Eio_unix.Net.socketpair_stream ~sw ~domain:PF_UNIX ~protocol:0 () in
-  test ~to_send:[fd1; fd2] r w;;
+  test ~to_send:[fd1; fd2] (Eio_unix.Net.Stream_socket.Cast.as_unix_flow r) w;;
 +Got: "x" plus 2 FDs
 +Read: "foo"
 +Read: "bar"
@@ -71,10 +73,10 @@ Using named sockets:
   with_tmp_file env#cwd "foo" @@ fun fd ->
   Switch.run @@ fun sw ->
   let addr = `Unix "test.socket" in
-  let server = Eio.Net.listen ~sw net ~reuse_addr:true ~backlog:1 addr in
+  let server = Eio_unix.Net.listen ~sw net ~reuse_addr:true ~backlog:1 addr in
   let r, w = Fiber.pair
-    (fun () -> Eio.Net.connect ~sw net addr)
-    (fun () -> fst (Eio.Net.accept ~sw server))
+    (fun () -> Eio_unix.Net.connect ~sw net addr)
+    (fun () -> fst (Eio_unix.Net.accept ~sw server))
   in
   test ~to_send:[fd] r w;;
 +Got: "x" plus 1 FDs

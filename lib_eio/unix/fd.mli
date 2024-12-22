@@ -89,4 +89,4 @@ val pp : t Fmt.t
 
 (** {2 Resource store *)
 
-val key : ('a, 'a -> t) Eio.Resource_store.key
+val key : t Eio.Resource_store.accessor

@@ -78,6 +78,8 @@ type ro = Ro : ('a *
 (* CR mbarbin: Inconsistent cast interface. TODO: Settle. *)
 module Ro : sig
   val to_source : ro -> Flow.source
+
+  val find_store : ro -> 'b Resource_store.accessor -> 'b option
 end
 
 type rw = Rw : ('a *
@@ -92,7 +94,10 @@ type rw = Rw : ('a *
 
 module Rw : sig
   val to_ro : rw -> ro
+  val to_source : rw -> Flow.source
   val to_sink : rw -> Flow.sink
+
+  val find_store : ro -> 'b Resource_store.accessor -> 'b option
 end
 
 (** {2 Metadata} *)

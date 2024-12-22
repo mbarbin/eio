@@ -119,28 +119,38 @@ module Listening_socket_impl = struct
   let listening_addr { listening_addr; _ } = listening_addr
 end
 
-type listening_socket =
-  | Listening_socket :
-      ('a *
-       < listening_socket : (module Eio.Net.Listening_socket.S with type t = 'a)
-       ; close : 'a -> unit
-       ; raw : 'a -> Listening_socket_impl.t
-       ; ..>)
-      -> listening_socket [@@unboxed]
+module Listening_socket = struct
 
-let raw_listening_socket (Listening_socket (t, ops)) = ops#raw t
+  type t =
+    | T :
+        ('a *
+         < listening_socket : (module Eio.Net.Listening_socket.S with type t = 'a)
+         ; close : 'a -> unit
+         ; resource_store : 'a Eio.Resource_store.t
+         ; raw : 'a -> Listening_socket_impl.t
+         ; ..>)
+        -> t [@@unboxed]
 
-let listening_socket ?listening_addr label : listening_socket =
+  let raw (T (t, ops)) = ops#raw t
+
+  module Cast = struct
+    let as_generic (T t) = Eio.Net.Listening_socket.T t
+  end
+end
+
+let listening_socket ?listening_addr label : Listening_socket.t =
+  let resource_store = Eio.Resource_store.create () in
   let ops =
     object
       method close = Listening_socket_impl.close
       method listening_socket = (module Listening_socket_impl : Eio.Net.Listening_socket.S with type t = Listening_socket_impl.t)
       method raw = Fun.id
+      method resource_store = resource_store
     end
   in
-  Listening_socket (Listening_socket_impl.make ?listening_addr label, ops)
+  Listening_socket.T (Listening_socket_impl.make ?listening_addr label, ops)
 
 let on_accept l actions =
-  let r = raw_listening_socket l in
+  let r = Listening_socket.raw l in
   let as_accept_pair x = (x :> Flow.t * Eio.Net.Sockaddr.stream) in
   Handler.seq r.on_accept (List.map (Action.map as_accept_pair) actions)

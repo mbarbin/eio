@@ -656,10 +656,12 @@ Can use `fs` to access absolute paths:
   let cwd = Eio.Stdenv.cwd env in
   let fs = Eio.Stdenv.fs env in
   let b = Buffer.create 10 in
-  Path.with_open_in (fs / Filename.null) (fun flow -> Eio.Flow.copy flow (Eio.Flow.buffer_sink b));
+  Path.with_open_in (fs / Filename.null) (fun flow ->
+    Eio.Flow.copy (Eio.File.Ro.to_source flow) (Eio.Flow.buffer_sink b));
   traceln "Read %S and got %S" Filename.null (Buffer.contents b);
   traceln "Trying with cwd instead fails:";
-  Path.with_open_in (cwd / Filename.null) (fun flow -> Eio.Flow.copy flow (Eio.Flow.buffer_sink b));;;
+  Path.with_open_in (cwd / Filename.null) (fun flow ->
+    Eio.Flow.copy (Eio.File.Ro.to_source flow) (Eio.Flow.buffer_sink b));;;
 +Read "/dev/null" and got ""
 +Trying with cwd instead fails:
 Exception: Eio.Io Fs Permission_denied _,
@@ -745,7 +747,7 @@ case, `with_open_in` will no longer close it on exit:
 # run @@ fun env ->
   let closed = Switch.run (fun sw -> Path.open_dir ~sw env#cwd) in
   try
-    failwith (Path.read_dir closed |> String.concat ",")
+    failwith (Path.read_dir (Path.Path closed) |> String.concat ",")
   with Invalid_argument _ -> traceln "Got Invalid_argument for closed FD";;
 +Got Invalid_argument for closed FD
 - : unit = ()
@@ -873,11 +875,11 @@ Check reading and writing vectors at arbitrary offsets:
   let cwd = Eio.Stdenv.cwd env in
   let path = cwd / "test.txt" in
   Path.with_open_out path ~create:(`Exclusive 0o600) @@ fun file ->
-  Eio.Flow.copy_string "+-!" file;
+  Eio.Flow.copy_string "+-!" (Eio.File.Rw.to_sink file);
   Eio.File.pwrite_all file ~file_offset:(Int63.of_int 2) Cstruct.[of_string "abc"; of_string "123"];
   let buf1 = Cstruct.create 3 in
   let buf2 = Cstruct.create 4 in
-  Eio.File.pread_exact file ~file_offset:(Int63.of_int 1) [buf1; buf2];
+  Eio.File.pread_exact (Eio.File.Rw.to_ro file) ~file_offset:(Int63.of_int 1) [buf1; buf2];
   traceln" %S/%S" (Cstruct.to_string buf1) (Cstruct.to_string buf2);;
 + "-ab"/"c123"
 - : unit = ()
@@ -890,7 +892,8 @@ Reading at the end of a file:
   let cwd = Eio.Stdenv.cwd env in
   let path = cwd / "test.txt" in
   Path.with_open_out path ~create:(`Or_truncate 0o600) @@ fun file ->
-  Eio.Flow.copy_string "abc" file;
+  Eio.Flow.copy_string "abc" (Eio.File.Rw.to_sink file);
+  let file = Eio.File.Rw.to_ro file in
   let buf = Cstruct.create 10 in
   let got = Eio.File.pread file [buf] ~file_offset:(Int63.of_int 0) in
   traceln "Read %S" (Cstruct.to_string buf ~len:got);
@@ -911,6 +914,7 @@ Ensure reads can be cancelled promptly, even if there is no need to wait:
 ```ocaml
 # run @@ fun env ->
   Eio.Path.with_open_out (env#fs / "/dev/zero") ~create:`Never @@ fun null ->
+  let null = Eio.File.Rw.to_source null in
   Fiber.both
      (fun () ->
         let buf = Cstruct.create 4 in
@@ -990,9 +994,9 @@ Exception: Failure "Simulated error".
 
 ```ocaml
 # run @@ fun env ->
-  let base = fst env#cwd in
+  let (Path.Path (base, _)) = env#cwd in
   List.iter (fun (a, b) ->
-    let (Eio.Path (_, p)) = Path (base, a) / b in
+    let (Path.Path (_, p)) = Path.Path (base, a) / b in
     traceln "%S / %S = %S" a b p) [
     "foo", "bar";
     "foo/", "bar";

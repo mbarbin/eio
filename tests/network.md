@@ -93,9 +93,11 @@ Handling one connection on a Unix domain socket:
 Exception: Graceful_shutdown.
 ```
 
-Handling one connection on an abstract Unix domain socket (this only works on Linux):
+Handling one connection on an abstract Unix domain socket (this only works on
+Linux):
 
 <!-- $MDX non-deterministic=command -->
+
 ```ocaml
 # run (test_address (`Unix "\x00/tmp/eio-test.sock"));;
 +Connecting to server...
@@ -206,9 +208,8 @@ Handling one UDP packet using IPv6:
 - : unit = ()
 ```
 
-Now test host-assigned addresses.
-`run_dgram2` is like `run_dgram` above, but doesn't print the sender address
-since it will be different in each run:
+Now test host-assigned addresses. `run_dgram2` is like `run_dgram` above, but
+doesn't print the sender address since it will be different in each run:
 
 ```ocaml
 let run_dgram2 ~e1 addr ~net sw =
@@ -434,6 +435,7 @@ On success, we close the connection immediately:
 +Mock connection should have been closed by now
 - : unit = ()
 ```
+
 If the forked fiber fails, we close immediately:
 
 ```ocaml
@@ -451,6 +453,7 @@ If the forked fiber fails, we close immediately:
 +Mock connection should have been closed by now
 Exception: Failure "Simulated error".
 ```
+
 If the fork itself fails, we still close the connection:
 
 ```ocaml
@@ -502,6 +505,7 @@ Exception: Failure "Simulated error".
 +Got: "foo"
 - : unit = ()
 ```
+
 ## Errors
 
 ECONNRESET:
@@ -590,27 +594,30 @@ Exception: Eio.Io Fs Not_found _,
 ```
 
 <!-- $MDX non-deterministic=output -->
+
 ```ocaml
 # Eio_main.run @@ fun env ->
-  Eio.Net.getaddrinfo ~service:"http" env#net "127.0.0.1";;
+  Eio_unix.Net.getaddrinfo ~service:"http" env#net "127.0.0.1";;
 - : Eio.Net.Sockaddr.t list =
 [`Tcp ("\127\000\000\001", 80); `Udp ("\127\000\000\001", 80)]
 ```
 
 <!-- $MDX non-deterministic=output -->
+
 ```ocaml
 # Eio_main.run @@ fun env ->
-  Eio.Net.getaddrinfo ~service:"ftp" env#net "127.0.0.1";;
+  Eio_unix.Net.getaddrinfo ~service:"ftp" env#net "127.0.0.1";;
 - : Eio.Net.Sockaddr.t list =
 [`Tcp ("\127\000\000\001", 21); `Udp ("\127\000\000\001", 21)]
 ```
 
 <!-- $MDX non-deterministic=output -->
+
 ```ocaml
 # Eio_main.run @@ fun env ->
   Eio.Net.getaddrinfo ~service:"https" env#net "google.com";;
 - : Eio.Net.Sockaddr.t list =
-[`Tcp ("ь:тн", 443); `Udp ("ь:тн", 443);
+[`Tcp ("О©╫:О©╫О©╫", 443); `Udp ("О©╫:О©╫О©╫", 443);
  `Tcp ("*\000\020P@\t\b \000\000\000\000\000\000 \014", 443);
  `Udp ("*\000\020P@\t\b \000\000\000\000\000\000 \014", 443)]
 ```
@@ -778,10 +785,10 @@ Eio.Io Net Connection_failure Timeout,
 - : unit = ()
 ```
 
-
 ## run_server
 
 A simple connection handler for testing:
+
 ```ocaml
 let handle_connection flow _addr =
   let msg = read_all flow in
@@ -790,8 +797,9 @@ let handle_connection flow _addr =
   Eio.Flow.copy_string "Bye" flow
 ```
 
-A mock listening socket that allows acceping `n_clients` clients, each of which writes "Hi",
-and then allows `n_domains` further attempts, none of which ever completes:
+A mock listening socket that allows acceping `n_clients` clients, each of which
+writes "Hi", and then allows `n_domains` further attempts, none of which ever
+completes:
 
 ```ocaml
 let mock_listener ~n_clients ~n_domains =
@@ -810,8 +818,8 @@ let mock_listener ~n_clients ~n_domains =
   listening_socket
 ```
 
-Start handling the connections, then begin a graceful shutdown,
-allowing the connections to finish and then exiting:
+Start handling the connections, then begin a graceful shutdown, allowing the
+connections to finish and then exiting:
 
 ```ocaml
 # Eio_mock.Backend.run @@ fun () ->

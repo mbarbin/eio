@@ -24,3 +24,5 @@ val create : unit -> _ t
 val set : 'a t -> key:('a, 'data) key -> data:'data -> unit
 
 val find : 'a t -> key:('a, 'data) key -> 'data option
+
+type 'b accessor = { key : 'a. ('a, 'a -> 'b) key }

@@ -22,7 +22,7 @@ end
 let of_generic (Eio.Flow.Source.T (a, ops)) =
   let source = ops#source in
   let resource_store = ops#resource_store in
-  let fd = Eio.Resource_store.find resource_store ~key:Fd.key in
+  let fd = Eio.Resource_store.find resource_store ~key:Fd.key.key in
   T
     (a,
      object

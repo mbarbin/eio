@@ -1,3 +1,11 @@
+module type S = sig
+  include Eio.Net.Stream_socket.S
+
+  val send_msg : t -> fds:Fd.t list -> Cstruct.t list -> int
+  val recv_msg_with_fds : t -> sw:Eio.Switch.t -> max_fds:int -> Cstruct.t list -> int * Fd.t list
+  val fd : t -> Fd.t
+end
+
 type t =
   | T :
       ('a *
@@ -6,6 +14,7 @@ type t =
        ; sink : (module Eio.Flow.SINK with type t = 'a)
        ; close : 'a -> unit
        ; fd : 'a -> Fd.t
+       ; stream_socket : (module S with type t = 'a)
        ; resource_store : 'a Eio.Resource_store.t
        ; .. >)
       -> t [@@unboxed]
@@ -21,14 +30,6 @@ end
 
 val close : t -> unit
 val fd : t -> Fd.t
-
-module type S = sig
-  include Eio.Net.Stream_socket.S
-
-  val send_msg : t -> fds:Fd.t list -> Cstruct.t list -> int
-  val recv_msg_with_fds : t -> sw:Eio.Switch.t -> max_fds:int -> Cstruct.t list -> int * Fd.t list
-  val fd : t -> Fd.t
-end
 
 module Pi : sig
   val make : (module S with type t = 'a) -> 'a -> t

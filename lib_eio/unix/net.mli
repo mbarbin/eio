@@ -46,13 +46,13 @@ end
 (** {2 Passing file descriptors} *)
 
 val send_msg :
-  Flow.t ->
+  Stream_socket.t ->
   ?fds:Fd.t list ->
   Cstruct.t list -> unit
 (** Like {!Eio.Flow.write}, but allows passing file descriptors (for Unix-domain sockets). *)
 
 val recv_msg_with_fds :
-  Flow.t ->
+  Stream_socket.t ->
   sw:Switch.t ->
   max_fds:int ->
   Cstruct.t list ->

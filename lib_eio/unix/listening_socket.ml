@@ -29,7 +29,7 @@ module Pi = struct
   (* CR mbarbin: Settle on the staged scheme consistently. *)
   let make (type a) (module X : S with type t = a) =
     let resource_store = Eio.Resource_store.create () in
-    Eio.Resource_store.set resource_store ~key:Fd.key ~data:X.fd;
+    Eio.Resource_store.set resource_store ~key:Fd.key.key ~data:X.fd;
     let module Generic = struct
       include X
 

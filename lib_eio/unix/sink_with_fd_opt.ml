@@ -15,7 +15,7 @@ end
 let of_generic (Eio.Flow.Sink.T (a, ops)) =
   let sink = ops#sink in
   let resource_store = ops#resource_store in
-  let fd = Eio.Resource_store.find resource_store ~key:Fd.key in
+  let fd = Eio.Resource_store.find resource_store ~key:Fd.key.key in
   T
     (a,
      object

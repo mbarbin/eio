@@ -83,6 +83,10 @@ type ro = Ro : ('a *
 
 module Ro = struct
   let to_source (Ro r) = Flow.Source.T r
+
+  let find_store (Ro (t, ops)) { Resource_store. key } =
+    Resource_store.find ops#resource_store ~key
+    |> Option.map (fun f -> f t)
 end
 
 type rw = Rw : ('a *
@@ -96,7 +100,12 @@ type rw = Rw : ('a *
 
 module Rw = struct
   let to_ro (Rw r) = Ro r
+  let to_source (Rw r) = Flow.Source.T r
   let to_sink (Rw r) = Flow.Sink.T r
+
+  let find_store (Ro (t, ops)) { Resource_store. key } =
+    Resource_store.find ops#resource_store ~key
+    |> Option.map (fun f -> f t)
 end
 
 module Pi = struct

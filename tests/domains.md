@@ -7,7 +7,7 @@
 ```ocaml
 open Eio.Std
 
-let run (fn : Eio.Domain_manager.ty r -> unit) =
+let run (fn : Eio.Domain_manager.t -> unit) =
   Eio_main.run @@ fun env ->
   fn (Eio.Stdenv.domain_mgr env)
 ```
@@ -32,8 +32,9 @@ The domain raises an exception:
 Exception: Failure "Exception from new domain".
 ```
 
-We can still run other fibers in the main domain while waiting.
-Here, we use a mutex to check that the parent domain really did run while waiting for the child domain.
+We can still run other fibers in the main domain while waiting. Here, we use a
+mutex to check that the parent domain really did run while waiting for the child
+domain.
 
 ```ocaml
 # run @@ fun mgr ->
@@ -191,8 +192,8 @@ Exception: Invalid_argument "Switch accessed from wrong domain!".
 
 # Fiber-local storage
 
-Fiber-local bindings are not propagated when spawning fibers in other
-domains (as the values may not be thread-safe):
+Fiber-local bindings are not propagated when spawning fibers in other domains
+(as the values may not be thread-safe):
 
 ```ocaml
 # run @@ fun mgr ->
