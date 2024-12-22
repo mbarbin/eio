@@ -33,6 +33,7 @@ end
 module Pi = struct
   let make (type t) (module X : S with type t = t) (t : t) =
     let resource_store = Eio.Resource_store.create () in
+    Eio.Resource_store.set resource_store ~key:Fd.key ~data:X.fd;
     T
       (t, object
          method close = X.close

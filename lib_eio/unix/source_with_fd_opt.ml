@@ -20,13 +20,16 @@ module Cast = struct
 end
 
 let of_generic (Eio.Flow.Source.T (a, ops)) =
+  let source = ops#source in
+  let resource_store = ops#resource_store in
+  let fd = Eio.Resource_store.find resource_store ~key:Fd.key in
   T
     (a,
      object
-       method source = ops#source
+       method source = source
        method close = None
-       method fd = None
-       method resource_store = ops#resource_store
+       method fd = fd
+       method resource_store = resource_store
      end)
 
 let fd (T (a, ops)) =
