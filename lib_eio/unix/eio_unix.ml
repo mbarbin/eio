@@ -5,9 +5,7 @@ open Eio.Std
 module Fd = Fd
 module Private = Private
 module Source = Source
-module Source_with_fd_opt = Source_with_fd_opt
 module Sink = Sink
-module Sink_with_fd_opt = Sink_with_fd_opt
 module Flow = Flow
 
 let await_readable = Private.await_readable

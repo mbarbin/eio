@@ -124,6 +124,7 @@ module Flow : sig
     val as_source : t -> Eio.Flow.Source.t
     val as_sink : t -> Eio.Flow.Sink.t
     val as_flow : t -> Eio.Flow.t
+    val as_stream_socket : t -> Eio.Net.Stream_socket.t
   end
 end
 

@@ -97,7 +97,7 @@ module Rw : sig
   val to_source : rw -> Flow.source
   val to_sink : rw -> Flow.sink
 
-  val find_store : ro -> 'b Resource_store.accessor -> 'b option
+  val find_store : rw -> 'b Resource_store.accessor -> 'b option
 end
 
 (** {2 Metadata} *)

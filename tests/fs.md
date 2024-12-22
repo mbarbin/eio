@@ -714,7 +714,7 @@ We can get the Unix FD from the flow and use it directly:
 # run @@ fun env ->
   let fs = Eio.Stdenv.fs env in
   Path.with_open_in (fs / Filename.null) (fun flow ->
-     match Eio_unix.Resource.fd_opt flow with
+     match File.Ro.find_store flow Eio_unix.Fd.key with
      | None -> failwith "No Unix file descriptor!"
      | Some fd ->
         Eio_unix.Fd.use_exn "read" fd @@ fun fd ->
@@ -732,7 +732,7 @@ case, `with_open_in` will no longer close it on exit:
 # run @@ fun env ->
   let fs = Eio.Stdenv.fs env in
   let fd = Path.with_open_in (fs / Filename.null) (fun flow ->
-    Option.get (Eio_unix.Fd.remove (Option.get (Eio_unix.Resource.fd_opt flow)))
+    Option.get (Eio_unix.Fd.remove (Option.get (File.Ro.find_store flow Eio_unix.Fd.key)))
   ) in
   let got = Unix.read fd (Bytes.create 10) 0 10 in
   traceln "Read %d bytes from null device" got;

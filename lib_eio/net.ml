@@ -184,6 +184,10 @@ module Stream_socket = struct
     let as_sink (T t) = Flow.Sink.T t
   end
 
+  let find_store (T (t, ops)) { Resource_store. key } =
+    Resource_store.find ops#resource_store ~key
+    |> Option.map (fun f -> f t)
+
   let close (T (t, ops)) = ops#close t
 
   module Pi = struct

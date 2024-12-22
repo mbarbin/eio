@@ -287,11 +287,11 @@ Extracting file descriptors from Eio objects:
     Fiber.pair
       (fun () ->
          let flow = Eio.Net.connect ~sw net addr in
-         (Eio_unix.Resource.fd_opt flow <> None)
+         (Eio.Net.Stream_socket.find_store flow Eio_unix.Fd.key <> None)
       )
       (fun () ->
          let flow, _addr = Eio.Net.accept ~sw server in
-         (Eio_unix.Resource.fd_opt flow <> None)
+         (Eio.Net.Stream_socket.find_store flow Eio_unix.Fd.key <> None)
       )
   in
   traceln "Client-side socket has Unix FD: %b" have_client;

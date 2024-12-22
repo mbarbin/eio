@@ -30,9 +30,9 @@ module type MGR_unix = sig
     t ->
     sw:Switch.t ->
     ?cwd:Eio.Path.t ->
-    ?stdin:Source_with_fd_opt.t ->
-    ?stdout:Sink_with_fd_opt.t ->
-    ?stderr:Sink_with_fd_opt.t ->
+    ?stdin:Eio.Flow.Source.t ->
+    ?stdout:Eio.Flow.Sink.t ->
+    ?stderr:Eio.Flow.Sink.t ->
     ?env:string array ->
     ?executable:string ->
     string list ->

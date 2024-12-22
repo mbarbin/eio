@@ -103,7 +103,7 @@ module Rw = struct
   let to_source (Rw r) = Flow.Source.T r
   let to_sink (Rw r) = Flow.Sink.T r
 
-  let find_store (Ro (t, ops)) { Resource_store. key } =
+  let find_store (Rw (t, ops)) { Resource_store. key } =
     Resource_store.find ops#resource_store ~key
     |> Option.map (fun f -> f t)
 end

@@ -161,4 +161,5 @@ module Cast = struct
   let as_source (T t) = Eio.Flow.Source.T t
   let as_sink (T t) = Eio.Flow.Sink.T t
   let as_flow (T t) = Eio.Flow.T t
+  let as_stream_socket (T t) = Eio.Net.Stream_socket.T t
 end

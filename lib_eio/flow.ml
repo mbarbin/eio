@@ -221,8 +221,6 @@ module Two_way = struct
     end)
 end
 
-let close = Resource.close
-
 module Closable = struct
   type closable_source =
     | Closable_source :

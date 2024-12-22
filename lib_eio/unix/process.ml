@@ -15,13 +15,13 @@ let resolve_program name =
 
 let read_of_fd ~sw ~default ~to_close = function
   | None -> default
-  | Some (Source_with_fd_opt.T (f, ops) as source) ->
-    match ops#fd with
+  | Some (Eio.Flow.Source.T (f, ops) as source) ->
+    match Eio.Resource_store.find ops#resource_store ~key:Fd.key.key with
     | Some fd -> fd f
     | None ->
       let r, w = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy (Source_with_fd_opt.Cast.as_generic source) (Sink.Cast.as_generic w);
+          Eio.Flow.copy source (Sink.Cast.as_generic w);
           Sink.close w
         );
       let r = Source.fd r in
@@ -30,13 +30,13 @@ let read_of_fd ~sw ~default ~to_close = function
 
 let write_of_fd ~sw ~default ~to_close = function
   | None -> default
-  | Some (Sink_with_fd_opt.T (f, ops) as sink) ->
-    match ops#fd with
+  | Some (Eio.Flow.Sink.T (f, ops) as sink) ->
+    match Eio.Resource_store.find ops#resource_store ~key:Fd.key.key with
     | Some fd -> fd f
     | None ->
       let r, w = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy (Source.Cast.as_generic r) (Sink_with_fd_opt.Cast.as_generic sink);
+          Eio.Flow.copy (Source.Cast.as_generic r) sink;
           Source.close r
         );
       let w = Sink.fd w in
@@ -93,9 +93,9 @@ module type MGR_unix = sig
     t ->
     sw:Switch.t ->
     ?cwd:Eio.Path.t ->
-    ?stdin:Source_with_fd_opt.t ->
-    ?stdout:Sink_with_fd_opt.t ->
-    ?stderr:Sink_with_fd_opt.t ->
+    ?stdin:Eio.Flow.Source.t ->
+    ?stdout:Eio.Flow.Sink.t ->
+    ?stderr:Eio.Flow.Sink.t ->
     ?env:string array ->
     ?executable:string ->
     string list ->
@@ -131,24 +131,7 @@ module Pi = struct
     let module X_mgr = struct
       type t = X.t
 
-      let spawn
-        t
-        ~sw
-        ?cwd
-        ?stdin
-        ?stdout
-        ?stderr
-        ?env
-        ?executable args =
-        X.spawn
-          t
-          ~sw
-          ?cwd
-          ?stdin:(Option.map Source_with_fd_opt.of_generic stdin)
-          ?stdout:(Option.map Sink_with_fd_opt.of_generic stdout)
-          ?stderr:(Option.map Sink_with_fd_opt.of_generic stderr)
-          ?env
-          ?executable args
+      let spawn = X.spawn
 
       let pipe t ~sw =
         let (T r), (T w) = X.pipe t ~sw in

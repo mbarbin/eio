@@ -133,6 +133,8 @@ module Stream_socket : sig
     val as_sink : t -> Flow.sink
   end
 
+  val find_store : t -> 'b Resource_store.accessor -> 'b option
+
   (* CR mbarbin: when the dust settles on the refactoring, define common
      interfaces, such as this close there, that would be defined somewhere so we
      can simply include them with type t. *)

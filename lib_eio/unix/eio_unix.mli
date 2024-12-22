@@ -15,9 +15,7 @@ module Fd = Fd
 (** A safe wrapper for {!Unix.file_descr}. *)
 
 module Source = Source
-module Source_with_fd_opt = Source_with_fd_opt
 module Sink = Sink
-module Sink_with_fd_opt = Sink_with_fd_opt
 module Flow = Flow
 
 module Net = Net

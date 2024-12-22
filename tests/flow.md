@@ -88,7 +88,7 @@ Copying from src using a plain buffer (the default):
   let src = Eio.Flow.cstruct_source [Cstruct.of_string "foobar"] in
   let dst = Eio_mock.Flow.make "dst" in
   Eio_mock.Flow.on_copy_bytes dst [`Return 3; `Return 5];
-  Eio.Flow.copy src dst;;
+  Eio.Flow.copy src (Eio_mock.Flow.Cast.as_sink dst);;
 +dst: wrote "foo"
 +dst: wrote "bar"
 - : unit = ()
@@ -147,12 +147,12 @@ Writing to and reading from a pipe.
   Eio.Fiber.both
     (fun () ->
       let buf = Cstruct.create (String.length msg) in
-      let () = Eio.Flow.read_exact r buf in
+      let () = Eio.Flow.read_exact (Eio_unix.Source.Cast.as_generic r) buf in
       traceln "Got: %s" (Cstruct.to_string buf)
     )
     (fun () ->
-      Eio.Flow.copy_string msg w;
-      Eio.Flow.close w
+      Eio.Flow.copy_string msg (Eio_unix.Sink.Cast.as_generic w);
+      Eio_unix.Sink.close w
     );;
 +Got: Hello, world
 - : unit = ()

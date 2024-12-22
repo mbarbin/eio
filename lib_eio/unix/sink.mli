@@ -1,7 +1,8 @@
 type t =
     T :
       ('a *
-       < close : 'a -> unit; fd : 'a -> Fd.t
+       < close : 'a -> unit
+       ; fd : 'a -> Fd.t
        ; sink : (module Eio.Flow.SINK with type t = 'a)
        ; resource_store : 'a Eio.Resource_store.t
        ; .. >) -> t [@@unboxed]

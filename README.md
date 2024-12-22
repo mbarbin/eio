@@ -180,7 +180,7 @@ The [Eio_mock][] library provides some convenient pre-built mocks:
 ```ocaml
 # #require "eio.mock";;
 # Eio_main.run @@ fun _env ->
-  main (Eio_mock.Flow.make "mock-stdout");;
+  main (Eio_mock.Flow.make "mock-stdout" |> Eio_mock.Flow.Cast.as_sink);;
 +mock-stdout: wrote "Hello, world!\n"
 - : unit = ()
 ```
@@ -365,14 +365,15 @@ Here is a server connection handler that handles an incoming connection by sendi
 ```ocaml
 let handle_client flow _addr =
   traceln "Server: got connection from client";
-  Eio.Flow.copy_string "Hello from server" flow
+  Eio.Flow.copy_string "Hello from server" (Eio.Net.Stream_socket.Cast.as_sink flow)
 ```
 
 We can test it using a mock flow:
 
 ```ocaml
 # Eio_mock.Backend.run @@ fun () ->
-  let flow = Eio_mock.Flow.make "flow" in
+  let mock_flow = Eio_mock.Flow.make "flow" in
+  let flow = Eio_mock.Flow.Cast.as_stream_socket mock_flow in
   let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 37568) in
   handle_client flow addr;;
 +Server: got connection from client
@@ -392,7 +393,7 @@ let run_client ~net ~addr =
   traceln "Client: connecting to server";
   let flow = Eio.Net.connect ~sw net addr in
   (* Read all data until end-of-stream (shutdown): *)
-  traceln "Client: received %S" (Eio.Flow.read_all flow)
+  traceln "Client: received %S" (Eio.Flow.read_all (Eio.Net.Stream_socket.Cast.as_source flow))
 ```
 
 Note: the `flow` is attached to `sw` and will be closed automatically when it finishes.
@@ -404,7 +405,7 @@ This can also be tested on its own using a mock network:
 # Eio_mock.Backend.run @@ fun () ->
   let net = Eio_mock.Net.make "mocknet" in
   let flow = Eio_mock.Flow.make "flow" in
-  Eio_mock.Net.on_connect net [`Return flow];
+  Eio_mock.Net.on_connect net [`Return (Eio_mock.Flow.Cast.as_stream_socket flow)];
   Eio_mock.Flow.on_read flow [
     `Return "(packet 1)";
     `Yield_then (`Return "(packet 2)");
@@ -860,7 +861,7 @@ Spawning a child process can be done using the [Eio.Process][] module:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env in
+  let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
   Eio.Process.run proc_mgr ["echo"; "hello"];;
 hello
 - : unit = ()
@@ -871,7 +872,7 @@ For example, we can use `tr` to convert some text to upper-case:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env in
+  let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
   Eio.Process.run proc_mgr ["tr"; "a-z"; "A-Z"]
     ~stdin:(Eio.Flow.string_source "One two three\n");;
 ONE TWO THREE
@@ -883,7 +884,7 @@ or use the `parse_out` convenience wrapper:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env in
+  let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
   Eio.Process.parse_out proc_mgr Eio.Buf_read.line ["echo"; "hello"];;
 - : string = "hello"
 ```
@@ -892,7 +893,7 @@ All process functions either return the exit status or check that it was zero (s
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env in
+  let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
   Eio.Process.parse_out proc_mgr Eio.Buf_read.take_all ["sh"; "-c"; "exit 3"];;
 Exception:
 Eio.Io Process Child_error Exited (code 3),
@@ -1338,8 +1339,8 @@ Protecting the file with a mutex will prevent that:
 
 ```ocaml
 module Atomic_file = struct
-  type 'a t = {
-    path : 'a Eio.Path.t;
+  type t = {
+    path : Eio.Path.t;
     mutex : Eio.Mutex.t;
   }
 
@@ -1614,9 +1615,7 @@ module Zero = struct
   let read_methods = []         (* Optional optimisations *)
 end
 
-let ops = Eio.Flow.Pi.source (module Zero)
-
-let zero = Eio.Resource.T ((), ops)
+let zero = Eio.Flow.Source.make (module Zero) ()
 ```
 
 It can then be used like any other Eio flow:
@@ -1764,6 +1763,7 @@ and what lifetime to give them, which is confusing if this is not needed.
 Creating the switch inside your function ensures that all resources are released
 promptly.
 
+<!-- $MDX skip -->
 ```ocaml
 (* BAD - switch should be created internally instead *)
 let load_config ~sw path =
@@ -1805,15 +1805,13 @@ If you want to store the argument, this may require you to cast internally:
 ```ocaml
 module Foo : sig
   type t
-  val of_source : _ Eio.Flow.source -> t
+  val of_source : Eio.Flow.source -> t
 end = struct
   type t = {
-    src : Eio.Flow.source_ty r;
+    src : Eio.Flow.source;
   }
 
-  let of_source x = {
-    src = (x :> Eio.Flow.source_ty r);
-  }
+  let of_source src = { src }
 end
 ```
 

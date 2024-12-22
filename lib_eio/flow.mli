@@ -4,8 +4,6 @@
 
     To read structured data (e.g. a line at a time), wrap a source using {!Buf_read}. *)
 
-open Std
-
 (** {2 Types} *)
 
 type 'a read_method = 'a Read_method.t = ..
@@ -135,10 +133,6 @@ val shutdown : t -> shutdown_command -> unit
 
     Flows are usually attached to switches and closed automatically when the switch
     finishes. However, it can be useful to close them sooner manually in some cases. *)
-
-(* CR mbarbin: Remove. *)
-val close : [> `Close] r -> unit
-(** Alias of {!Resource.close}. *)
 
 (* CR mbarbin: Review, think about the names for consistency. *)
 module Closable : sig

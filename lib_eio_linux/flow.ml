@@ -97,11 +97,10 @@ module Impl = struct
 
   let single_write t bufs = Low_level.writev_single t (truncate_to_iomax bufs)
 
-  let copy t ~src =
-    match Eio_unix.Source_with_fd_opt.fd src with
-    | Some src -> fast_copy_try_splice src t
+  let copy t ~src:(Eio.Flow.Source.T (src, ops)) =
+    match Eio.Resource_store.find ops#resource_store ~key:Eio_unix.Fd.key.key with
+    | Some fd -> fast_copy_try_splice (fd src) t
     | None ->
-      let Eio_unix.Source_with_fd_opt.T (src, ops) = src in
       let module Src = (val ops#source) in
       let rec aux = function
         | Eio.Flow.Read_source_buffer rsb :: _ -> copy_with_rsb (rsb src) t

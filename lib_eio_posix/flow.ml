@@ -70,7 +70,6 @@ module Impl = struct
     with End_of_file -> ()
 
   let copy t ~src =
-    let src = Eio_unix.Source_with_fd_opt.Cast.as_generic src in
     let Eio.Flow.Source.T (src_t, ops) = src in
     let module Src = (val ops#source) in
     let rec aux = function

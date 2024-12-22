@@ -30,8 +30,6 @@ end
 module type S = sig
   include Eio.File.WRITE
   include Stream_socket.S with type t := t
-
-  val copy : t -> src:Source_with_fd_opt.t -> unit
 end
 
 module Pi : sig
