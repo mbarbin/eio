@@ -60,7 +60,7 @@ Exception: End_of_file.
   let src = Eio_mock.Flow.make "src" in
   let dst = Eio_mock.Flow.make "dst" in
   Eio_mock.Flow.on_read src [`Return "foo"; `Return "bar"];
-  Eio.Flow.copy src dst;;
+  Eio.Flow.copy (Eio_mock.Flow.Cast.as_source src) (Eio_mock.Flow.Cast.as_sink dst);;
 +src: read "foo"
 +dst: wrote "foo"
 +src: read "bar"
@@ -75,7 +75,7 @@ Copying from a string src:
   let src = Eio.Flow.string_source "foobar" in
   let dst = Eio_mock.Flow.make "dst" in
   Eio_mock.Flow.on_copy_bytes dst [`Return 3; `Return 5];
-  Eio.Flow.copy src dst;;
+  Eio.Flow.copy src (Eio_mock.Flow.Cast.as_sink dst);;
 +dst: wrote "foo"
 +dst: wrote "bar"
 - : unit = ()
@@ -102,7 +102,7 @@ Copying from src using `Read_source_buffer`:
   let dst = Eio_mock.Flow.make "dst" in
   Eio_mock.Flow.set_copy_method dst `Read_source_buffer;
   Eio_mock.Flow.on_copy_bytes dst [`Return 3; `Return 5];
-  Eio.Flow.copy src dst;;
+  Eio.Flow.copy src (Eio_mock.Flow.Cast.as_sink dst);;
 +dst: wrote (rsb) ["foo"]
 +dst: wrote (rsb) ["bar"]
 - : unit = ()
@@ -130,7 +130,7 @@ Copying from src using `Read_source_buffer`:
 # run @@ fun () ->
   let dst = Eio_mock.Flow.make "dst" in
   Eio_mock.Flow.on_copy_bytes dst [`Return 6];
-  Eio.Flow.write dst [Cstruct.of_string "foobar"];;
+  Eio.Flow.write (Eio_mock.Flow.Cast.as_sink dst) [Cstruct.of_string "foobar"];;
 +dst: wrote "foobar"
 - : unit = ()
 ```
@@ -166,7 +166,7 @@ Make sure we don't crash on SIGPIPE:
   let r, w = Eio_unix.pipe sw in
   Eio.Flow.close r;
   try
-    Eio.Flow.copy_string "Test" w;
+    Eio.Flow.copy_string "Test" (Eio_unix.Sink.Cast.as_generic w);
     assert false
   with Eio.Io (Eio.Net.E Connection_reset _, _) ->
     traceln "Connection_reset (good)";;
@@ -186,11 +186,11 @@ Sending a very long vector over a flow should just send it in chunks, not fail:
   let vecs = List.init 10_000 (Fun.const a) in
   Fiber.both
     (fun () ->
-       Eio.Flow.write w vecs;
-       Eio.Flow.close w
+       Eio.Flow.write (Eio_unix.Sink.Cast.as_generic w) vecs;
+       Eio_unix.Sink.close w
     )
     (fun () ->
-       let got = Eio.Flow.read_all r in
+       let got = Eio.Flow.read_all (Eio_unix.Source.Cast.as_generic r) in
        traceln "Read %d bytes" (String.length got);
        assert (got = Cstruct.to_string (Cstruct.concat vecs))
     )
@@ -211,11 +211,11 @@ Even if a fiber is already ready to run, we still perform IO from time to time:
   Fiber.both
     (fun () ->
        let buf = Cstruct.create 3 in
-       Eio.Flow.read_exact r buf;
+       Eio.Flow.read_exact (Eio_unix.Source.Cast.as_generic r) buf;
        traceln "Got %S" (Cstruct.to_string buf)
     )
     (fun () ->
-       Eio.Flow.write w [Cstruct.of_string "msg"]
+       Eio.Flow.write (Eio_unix.Sink.Cast.as_generic w) [Cstruct.of_string "msg"]
     )
 +Got "msg"
 - : unit = ()

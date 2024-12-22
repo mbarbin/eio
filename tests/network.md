@@ -8,9 +8,9 @@
 ```ocaml
 open Eio.Std
 
-let run (fn : net:_ Eio.Net.t -> Switch.t -> unit) =
+let run (fn : net:Eio.Net.t -> Switch.t -> unit) =
   Eio_main.run @@ fun env ->
-  let net = Eio.Stdenv.net env in
+  let net = Eio.Stdenv.net env |> Eio_unix.Net.to_generic in
   Switch.run (fn ~net)
 
 let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 8081)
@@ -96,7 +96,7 @@ Exception: Graceful_shutdown.
 Handling one connection on an abstract Unix domain socket (this only works on
 Linux):
 
-<!-- $MDX non-deterministic=command -->
+<!-- $MDX file non-deterministic=command -->
 
 ```ocaml
 # run (test_address (`Unix "\x00/tmp/eio-test.sock"));;
@@ -593,7 +593,7 @@ Exception: Eio.Io Fs Not_found _,
 - : Eio.Net.Sockaddr.datagram list = [`Udp ("\127\000\000\001", 80)]
 ```
 
-<!-- $MDX non-deterministic=output -->
+<!-- $MDX file non-deterministic=output -->
 
 ```ocaml
 # Eio_main.run @@ fun env ->
@@ -602,7 +602,7 @@ Exception: Eio.Io Fs Not_found _,
 [`Tcp ("\127\000\000\001", 80); `Udp ("\127\000\000\001", 80)]
 ```
 
-<!-- $MDX non-deterministic=output -->
+<!-- $MDX file non-deterministic=output -->
 
 ```ocaml
 # Eio_main.run @@ fun env ->
@@ -611,7 +611,7 @@ Exception: Eio.Io Fs Not_found _,
 [`Tcp ("\127\000\000\001", 21); `Udp ("\127\000\000\001", 21)]
 ```
 
-<!-- $MDX non-deterministic=output -->
+<!-- $MDX file non-deterministic=output -->
 
 ```ocaml
 # Eio_main.run @@ fun env ->

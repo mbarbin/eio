@@ -87,7 +87,7 @@ let open_out ~sw ?(append=false) ~create t =
     let bt = Printexc.get_raw_backtrace () in
     Exn.reraise_with_context ex bt "opening %a" pp t
 
-let open_dir ~sw t =
+let open_dir' ~sw t =
   let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try
@@ -96,6 +96,8 @@ let open_dir ~sw t =
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
     Exn.reraise_with_context ex bt "opening directory %a" pp t
+
+let open_dir ~sw t = Path (open_dir' ~sw t)
 
 let mkdir ~perm t =
   let (Path (Resource.T (dir, ops), path)) = t in
@@ -138,7 +140,7 @@ let with_open_out ?append ~create path fn =
   Switch.run ~name:"with_open_out" @@ fun sw -> fn (open_out ~sw ?append ~create path)
 
 let with_open_dir' path fn =
-  Switch.run ~name:"with_open_dir" @@ fun sw -> fn (open_dir ~sw path)
+  Switch.run ~name:"with_open_dir" @@ fun sw -> fn (open_dir' ~sw path)
 
 let with_open_dir path fn =
   with_open_dir' path (fun dir -> fn (Path dir))
@@ -198,9 +200,9 @@ let rec rmtree ~missing_ok t =
     Switch.run ~name:"rmtree" (fun sw ->
         match
           let t = open_dir ~sw t in
-          t, read_dir (Path t)
+          t, read_dir t
         with
-        | t, items -> List.iter (fun x -> rmtree ~missing_ok (Path t / x)) items
+        | t, items -> List.iter (fun x -> rmtree ~missing_ok (t / x)) items
         | exception Exn.Io (Fs.E Not_found _, _) when missing_ok -> ()
     );
     catch_missing ~missing_ok rmdir t

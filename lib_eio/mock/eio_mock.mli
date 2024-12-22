@@ -120,6 +120,8 @@ module Flow : sig
   (** [set_copy_method t m] configures [t] to use the given method to read from
       a source during a copy operation. *)
 
+  val close : t -> unit
+
   module Cast : sig
     val as_source : t -> Eio.Flow.Source.t
     val as_sink : t -> Eio.Flow.Sink.t
@@ -189,6 +191,10 @@ module Net : sig
     (Flow.t * Eio.Net.Sockaddr.stream) Handler.actions ->
     unit
   (** [on_accept socket actions] configures how to respond when the server calls "accept". *)
+
+  module Cast : sig
+    val as_generic : t -> Eio.Net.t
+  end
 end
 
 (** A mock {!Eio.Time} clock for testing timeouts. *)

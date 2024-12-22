@@ -543,7 +543,7 @@ Create a sandbox, write a file with it, then read it from outside:
     Eio.Exn.Backend.show := succeeds;
     try
       Switch.run @@ fun sw ->
-      let _ : _ Path.t = Path.open_dir ~sw path in
+      let _ : Path.t = Path.open_dir ~sw path in
       traceln "open_dir %a -> OK" Path.pp path
     with ex ->
       traceln "@[<h>%a@]" Eio.Exn.pp ex
@@ -714,7 +714,7 @@ We can get the Unix FD from the flow and use it directly:
 # run @@ fun env ->
   let fs = Eio.Stdenv.fs env in
   Path.with_open_in (fs / Filename.null) (fun flow ->
-     match File.Ro.find_store flow Eio_unix.Fd.key with
+     match Eio.File.Ro.find_store flow Eio_unix.Fd.key with
      | None -> failwith "No Unix file descriptor!"
      | Some fd ->
         Eio_unix.Fd.use_exn "read" fd @@ fun fd ->
@@ -732,7 +732,7 @@ case, `with_open_in` will no longer close it on exit:
 # run @@ fun env ->
   let fs = Eio.Stdenv.fs env in
   let fd = Path.with_open_in (fs / Filename.null) (fun flow ->
-    Option.get (Eio_unix.Fd.remove (Option.get (File.Ro.find_store flow Eio_unix.Fd.key)))
+    Option.get (Eio_unix.Fd.remove (Option.get (Eio.File.Ro.find_store flow Eio_unix.Fd.key)))
   ) in
   let got = Unix.read fd (Bytes.create 10) 0 10 in
   traceln "Read %d bytes from null device" got;
@@ -747,7 +747,7 @@ case, `with_open_in` will no longer close it on exit:
 # run @@ fun env ->
   let closed = Switch.run (fun sw -> Path.open_dir ~sw env#cwd) in
   try
-    failwith (Path.read_dir (Path.Path closed) |> String.concat ",")
+    failwith (Path.read_dir closed |> String.concat ",")
   with Invalid_argument _ -> traceln "Got Invalid_argument for closed FD";;
 +Got Invalid_argument for closed FD
 - : unit = ()

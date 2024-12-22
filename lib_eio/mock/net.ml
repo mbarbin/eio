@@ -64,6 +64,10 @@ type t =
        ; ..>)
       -> t [@@unboxed]
 
+module Cast = struct
+  let as_generic (Network t) = Eio.Net.Network t
+end
+
 let raw (Network (t, ops)) = ops#raw t
 
 let make : string -> t =

@@ -143,10 +143,12 @@ val mkdirs : ?exists_ok:bool -> perm:File.Unix_perm.t -> t -> unit
 
     @param exist_ok If [false] (the default) then we raise {! Fs.Already_exists} if [t] is already a directory. *)
 
-val open_dir : sw:Switch.t -> t -> [< `Close | dir_ty] t'
+val open_dir' : sw:Switch.t -> t -> [< `Close | dir_ty] t'
 (** [open_dir ~sw t] opens [t].
 
     This can be passed to functions to grant access only to the subtree [t]. *)
+
+val open_dir : sw:Switch.t -> t -> t
 
 val with_open_dir' : t -> ([< `Close | dir_ty] t' -> 'a) -> 'a
 (** [with_open_dir] is like [open_dir], but calls [fn dir] with the new directory and closes

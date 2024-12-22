@@ -39,6 +39,17 @@ type t =
 
 val to_generic : t -> Eio.Net.t
 
+val accept :
+  sw:Switch.t ->
+  Listening_socket.t ->
+  Stream_socket.t * Eio.Net.Sockaddr.stream
+
+val listen :
+  ?reuse_addr:bool -> ?reuse_port:bool -> backlog:int -> sw:Switch.t ->
+  t -> Eio.Net.Sockaddr.stream -> Listening_socket.t
+
+val connect : sw:Switch.t -> t -> Eio.Net.Sockaddr.stream -> Stream_socket.t
+
 module Pi : sig
   val make : (module S with type t = 'a) -> 'a -> t
 end

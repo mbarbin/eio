@@ -412,7 +412,7 @@ This can also be tested on its own using a mock network:
     `Raise End_of_file;
   ];
   let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 8080) in
-  run_client ~net ~addr;;
+  run_client ~net:(Eio_mock.Net.Cast.as_generic net) ~addr;;
 +Client: connecting to server
 +mocknet: connect to tcp:127.0.0.1:8080
 +flow: read "(packet 1)"
@@ -449,7 +449,7 @@ the test would never finish.
 ```ocaml
 # Eio_main.run @@ fun env ->
   main
-    ~net:(Eio.Stdenv.net env)
+    ~net:(Eio.Stdenv.net env |> Eio_unix.Net.to_generic)
     ~addr:(`Tcp (Eio.Net.Ipaddr.V4.loopback, 8080));;
 +Client: connecting to server
 +Server: got connection from client

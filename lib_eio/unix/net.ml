@@ -108,6 +108,23 @@ end
 
 let to_generic = To_generic.project
 
+let accept ~sw (Listening_socket.T (t, ops)) =
+  let module X = (val ops#unix_listening_socket) in
+  X.accept t ~sw
+
+let listen ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : t) =
+  let (Network (t, ops)) = t in
+  let module X = (val ops#network) in
+  X.listen t ~reuse_addr ~reuse_port ~backlog ~sw
+
+let connect ~sw (t : t) addr =
+  let (Network (t, ops)) = t in
+  let module X = (val ops#network) in
+  try X.connect t ~sw addr
+  with Eio.Exn.Io _ as ex ->
+    let bt = Printexc.get_raw_backtrace () in
+    Eio.Exn.reraise_with_context ex bt "connecting to %a" Eio.Net.Sockaddr.pp addr
+
 module Pi = struct
   let make (type a) (module X : S with type t = a) (t : a) =
     Network (t, object method network = (module X : S with type t = a) end)

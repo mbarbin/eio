@@ -58,7 +58,7 @@ Using a socket-pair:
   with_tmp_file env#cwd "bar" @@ fun fd2 ->
   Switch.run @@ fun sw ->
   let r, w = Eio_unix.Net.socketpair_stream ~sw ~domain:PF_UNIX ~protocol:0 () in
-  test ~to_send:[fd1; fd2] (Eio_unix.Net.Stream_socket.Cast.as_unix_flow r) w;;
+  test ~to_send:[fd1; fd2] r w;;
 +Got: "x" plus 2 FDs
 +Read: "foo"
 +Read: "bar"
