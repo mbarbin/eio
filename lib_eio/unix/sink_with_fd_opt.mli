@@ -4,6 +4,7 @@ type t =
        < close : ('a -> unit) option
        ; sink : (module Eio.Flow.SINK with type t = 'a)
        ; fd : ('a -> Fd.t) option
+       ; resource_store : 'a Eio.Resource_store.t
        ; .. >)
       -> t [@@unboxed]
 

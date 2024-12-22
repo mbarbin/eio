@@ -9,6 +9,7 @@ type t =
        ; write : (module Eio.File.WRITE with type t = 'a)
        ; fd : 'a -> Fd.t
        ; stream_socket : (module Stream_socket.S with type t = 'a)
+       ; resource_store : 'a Eio.Resource_store.t
        ; ..>)
       -> t [@@unboxed]
 

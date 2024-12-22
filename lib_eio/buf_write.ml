@@ -515,7 +515,7 @@ let copy t flow =
   try aux ()
   with End_of_file -> ()
 
-let with_flow ?(initial_size=0x1000) flow fn =
+let with_sink ?(initial_size=0x1000) flow fn =
   Switch.run ~name:"Buf_write.with_flow" @@ fun sw ->
   let t = create ~sw initial_size in
   Fiber.fork ~sw (fun () -> copy t flow);
@@ -530,6 +530,8 @@ let with_flow ?(initial_size=0x1000) flow fn =
        end the writer thread itself (and [flush] will raise). *)
     flush t;
     raise ex
+
+let with_flow ?initial_size flow fn = with_sink ?initial_size (Flow.Cast.as_sink flow) fn
 
 let rec serialize t writev =
   match await_batch t with

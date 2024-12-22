@@ -139,6 +139,7 @@ end
 
 (** Defines the base resource type. *)
 module Resource = Resource
+module Resource_store = Resource_store
 
 (** {2 Byte streams} *)
 

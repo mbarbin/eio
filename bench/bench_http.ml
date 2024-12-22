@@ -23,7 +23,7 @@ let parse_headers r =
   !len
 
 let handle_connection conn _addr =
-  Eio.Buf_write.with_flow (Eio.Net.Stream_socket.Cast.as_sink conn) @@ fun w ->
+  Eio.Buf_write.with_sink (Eio.Net.Stream_socket.Cast.as_sink conn) @@ fun w ->
   let rec requests r =
     let _req = Eio.Buf_read.line r in
     let len = parse_headers r in
@@ -40,7 +40,7 @@ let handle_connection conn _addr =
 let run_client ~n_requests id conn =
   let total = ref 0 in
   let r = Eio.Buf_read.of_flow (Eio.Net.Stream_socket.Cast.as_source conn) ~max_size:max_int in
-  Eio.Buf_write.with_flow (Eio.Net.Stream_socket.Cast.as_sink conn) @@ fun w ->
+  Eio.Buf_write.with_sink (Eio.Net.Stream_socket.Cast.as_sink conn) @@ fun w ->
   for i = 1 to n_requests do
     let msg = Printf.sprintf "%s / request %d" id i in
     Eio.Buf_write.string w "POST / HTTP/1.1\r\n";

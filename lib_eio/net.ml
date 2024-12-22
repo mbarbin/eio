@@ -175,6 +175,7 @@ module Stream_socket = struct
          ; source : (module Flow.SOURCE with type t = 'a)
          ; sink : (module Flow.SINK with type t = 'a)
          ; close : 'a -> unit
+         ; resource_store : 'a Resource_store.t
          ; .. >)
         -> t [@@unboxed]
 
@@ -187,12 +188,14 @@ module Stream_socket = struct
 
   module Pi = struct
     let make (type t) (module X : S with type t = t) (t : t) =
+      let resource_store = Resource_store.create () in
       T
         (t, object
            method close = X.close
            method shutdown = (module X : Flow.SHUTDOWN with type t = t)
            method source = (module X : Flow.SOURCE with type t = t)
            method sink = (module X : Flow.SINK with type t = t)
+           method resource_store = resource_store
          end)
   end
 end
@@ -212,6 +215,7 @@ module Listening_socket = struct
       ('a *
        < listening_socket : (module S with type t = 'a)
        ; close : 'a -> unit
+       ; resource_store : 'a Resource_store.t
        ; ..>)
       -> t [@@unboxed]
 
@@ -220,10 +224,12 @@ module Listening_socket = struct
 
   module Pi = struct
     let make (type t) (module X : S with type t = t) (t : t) =
+      let resource_store = Resource_store.create () in
       T
         (t, object
            method close = X.close
            method listening_socket = (module X : S with type t = t)
+           method resource_store = resource_store
          end)
   end
 end
@@ -245,6 +251,7 @@ module Datagram_socket = struct
          < shutdown : (module Flow.SHUTDOWN with type t = 'a)
          ; datagram_socket : (module S with type t = 'a)
          ; close : 'a -> unit
+         ; resource_store : 'a Resource_store.t
          ; .. >)
         -> t [@@unboxed]
 
@@ -253,11 +260,13 @@ module Datagram_socket = struct
 
   module Pi = struct
     let make (type t) (module X : S with type t = t) (t : t) =
+      let resource_store = Resource_store.create () in
       T
         (t, object
            method shutdown = (module X : Flow.SHUTDOWN with type t = t)
            method datagram_socket = (module X : S with type t = t)
            method close = X.close
+           method resource_store = resource_store
          end)
   end
 end

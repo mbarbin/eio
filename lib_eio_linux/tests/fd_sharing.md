@@ -10,7 +10,8 @@ open Eio.Std
 
 # Tests
 
-One domain closes an FD after another domain has enqueued a uring operation mentioning it.
+One domain closes an FD after another domain has enqueued a uring operation
+mentioning it.
 
 ```ocaml
 # Eio_linux.run @@ fun env ->
@@ -27,7 +28,7 @@ One domain closes an FD after another domain has enqueued a uring operation ment
            (fun () ->
               traceln "Domain 1 enqueuing read on FD";
               let buf = Cstruct.create 1 in
-              match Eio.Flow.single_read r buf with
+              match Eio.Flow.single_read (Eio_unix.Source.Cast.as_generic r) buf with
               | _ -> assert false
               | exception End_of_file -> traceln "Read EOF"
            )

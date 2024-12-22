@@ -137,8 +137,11 @@ let with_open_in path fn =
 let with_open_out ?append ~create path fn =
   Switch.run ~name:"with_open_out" @@ fun sw -> fn (open_out ~sw ?append ~create path)
 
-let with_open_dir path fn =
+let with_open_dir' path fn =
   Switch.run ~name:"with_open_dir" @@ fun sw -> fn (open_dir ~sw path)
+
+let with_open_dir path fn =
+  with_open_dir' path (fun dir -> fn (Path dir))
 
 let with_lines path fn =
   with_open_in path @@ fun flow ->

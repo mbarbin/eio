@@ -124,6 +124,7 @@ module Stream_socket : sig
          ; source : (module Flow.SOURCE with type t = 'a)
          ; sink : (module Flow.SINK with type t = 'a)
          ; close : 'a -> unit
+         ; resource_store : 'a Resource_store.t
          ; .. >)
         -> t [@@unboxed]
 
@@ -132,9 +133,9 @@ module Stream_socket : sig
     val as_sink : t -> Flow.sink
   end
 
-  (* CR mbarbin: when the dust settles on the refactoring, define
-     common interfaces, such as this close there, that would be
-     defined somewhere so we can simply include them with type t. *)
+  (* CR mbarbin: when the dust settles on the refactoring, define common
+     interfaces, such as this close there, that would be defined somewhere so we
+     can simply include them with type t. *)
   val close : t -> unit
 
   module Pi : sig
@@ -157,6 +158,7 @@ module Listening_socket : sig
         ('a *
          < listening_socket : (module S with type t = 'a)
          ; close : 'a -> unit
+         ; resource_store : 'a Resource_store.t
          ; ..>)
         -> t [@@unboxed]
 
@@ -185,6 +187,7 @@ module Datagram_socket : sig
          < shutdown : (module Flow.SHUTDOWN with type t = 'a)
          ; datagram_socket : (module S with type t = 'a)
          ; close : 'a -> unit
+         ; resource_store : 'a Resource_store.t
          ; .. >)
         -> t [@@unboxed]
 

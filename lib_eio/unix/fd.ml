@@ -97,3 +97,8 @@ let stdout = of_unix_no_hook Unix.stdout
 let stderr= of_unix_no_hook Unix.stderr
 
 let pp f t = Rcfd.pp f t.fd
+
+module K = Eio.Resource_store.Key (struct
+  type nonrec 'a t = 'a -> t
+end)
+let key = K.key

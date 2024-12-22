@@ -5,6 +5,7 @@ type t =
        ; datagram_socket : (module Eio.Net.Datagram_socket.S with type t = 'a)
        ; close : 'a -> unit
        ; fd : 'a -> Fd.t
+       ; resource_store : 'a Eio.Resource_store.t
        ; .. >)
       -> t [@@unboxed]
 

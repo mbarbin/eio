@@ -7,10 +7,9 @@ module type S = sig
   val fd : t -> Fd.t
 end
 
-(* CR mbarbin: I'm experimenting with both methods unix and generic,
-   built during [Pi.make] to make the casting function cheap. Low
-   confidence about this scheme at the moment, re-consider when
-   knowing more about use cases. *)
+(* CR mbarbin: I'm experimenting with both methods unix and generic, built
+   during [Pi.make] to make the casting function cheap. Low confidence about
+   this scheme at the moment, re-consider when knowing more about use cases. *)
 
 type t =
   | T :
@@ -19,6 +18,7 @@ type t =
        ; unix_listening_socket : (module S with type t = 'a)
        ; close : 'a -> unit
        ; fd : 'a -> Fd.t
+       ; resource_store : 'a Eio.Resource_store.t
        ; ..>)
       -> t [@@unboxed]
 

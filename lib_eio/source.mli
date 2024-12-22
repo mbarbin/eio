@@ -6,6 +6,12 @@ module type S = sig
   val single_read : t -> Cstruct.t -> int
 end
 
-type t = T : ('a * < source : (module S with type t = 'a); ..>) -> t [@@unboxed]
+type t =
+  | T :
+      ('a *
+       < source : (module S with type t = 'a)
+       ; resource_store : 'a Resource_store.t
+       ; ..>)
+      -> t [@@unboxed]
 
 val make : (module S with type t = 'a) -> 'a -> t

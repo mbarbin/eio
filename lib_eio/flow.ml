@@ -186,6 +186,7 @@ type t = T : ('a *
  < source : (module Source.S with type t = 'a)
  ; sink : (module Sink.S with type t = 'a)
  ; shutdown : (module Shutdownable.S with type t = 'a)
+ ; resource_store : 'a Resource_store.t
  ; ..>) -> t [@@unboxed]
 
 module Cast = struct
@@ -195,10 +196,12 @@ end
 
 module Pi = struct
   let make (type t) (module X : S with type t = t) (t : t) =
+    let resource_store = Resource_store.create () in
     T (t, object
       method shutdown = (module X : Shutdownable.S with type t = t)
       method source = (module X : Source.S with type t = t)
       method sink = (module X : Sink.S with type t = t)
+      method resource_store = resource_store
     end)
 
   let simple_copy = simple_copy
@@ -221,8 +224,23 @@ end
 let close = Resource.close
 
 module Closable = struct
-  type closable_source = Closable_source : ('a * < source : (module Source.S with type t = 'a); close : 'a -> unit; ..>) -> closable_source [@@unboxed]
-  type closable_sink = Closable_sink : ('a * < sink : (module Sink.S with type t = 'a); close : 'a -> unit; ..>) -> closable_sink  [@@unboxed]
+  type closable_source =
+    | Closable_source :
+        ('a *
+         < source : (module Source.S with type t = 'a)
+         ; close : 'a -> unit
+         ; resource_store : 'a Resource_store.t
+         ; ..>)
+        -> closable_source [@@unboxed]
+
+  type closable_sink =
+    | Closable_sink :
+        ('a *
+         < sink : (module Sink.S with type t = 'a)
+         ; close : 'a -> unit
+         ; resource_store : 'a Resource_store.t
+         ; ..>)
+        -> closable_sink  [@@unboxed]
 
   (* CR mbarbin: Adopt the [Cast] naming scheme. *)
   let source (Closable_source s) = Source.T s

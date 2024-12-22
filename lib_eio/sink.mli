@@ -11,6 +11,12 @@ module type S = sig
 
 end
 
-type t = T : ('a * < sink : (module S with type t = 'a); ..>) -> t [@@unboxed]
+type t =
+  | T :
+      ('a *
+       < sink : (module S with type t = 'a)
+       ; resource_store : 'a Resource_store.t
+       ; ..>)
+      -> t [@@unboxed]
 
 val make : (module S with type t = 'a) -> 'a -> t

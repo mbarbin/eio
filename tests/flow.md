@@ -27,8 +27,8 @@ let mock_source =
         t := Cstruct.shiftv (x :: xs) len;
         len
   end in
-  let ops = Eio.Flow.Pi.source (module X) in
-  fun items -> Eio.Resource.T (ref items, ops)
+  let ops = Eio.Flow.Source.make (module X) in
+  fun items -> ops (ref items)
 ```
 
 ## read_exact

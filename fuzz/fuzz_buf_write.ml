@@ -34,7 +34,7 @@ let random ops close =
   let b = Buffer.create 100 in
   let flow = Eio.Flow.buffer_sink b in
   let expected = ref [] in
-  W.with_flow flow ~initial_size (fun t ->
+  W.with_sink flow ~initial_size (fun t ->
       let perform (Op (s, write)) =
         expected := s :: !expected;
         write t

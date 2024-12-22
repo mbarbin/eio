@@ -20,7 +20,7 @@ let run ?clear:(paths = []) fn =
   Eio_main.run @@ fun env ->
   let cwd = Eio.Stdenv.cwd env in
   List.iter (fun p -> Eio.Path.rmtree ~missing_ok:true (cwd / p)) paths;
-  fn env#process_mgr env
+  fn (env#process_mgr |> Eio_unix.Process.Mgr.as_generic) env
 
 let status_to_string = Fmt.to_to_string Eio.Process.pp_status
 ```
@@ -63,6 +63,7 @@ Passing in flows allows you to redirect the child process' stdout:
   let fs = Eio.Stdenv.fs env in
   let path = fs / "process-test.txt" in
   Eio.Path.(with_open_out ~create:(`Exclusive 0o600) path) @@ fun stdout ->
+  let stdout = Eio.File.Rw.to_sink stdout in
   Process.run mgr ~stdout [ "echo"; "Hello" ];
   Eio.Path.(load path);;
 - : string = "Hello\n"

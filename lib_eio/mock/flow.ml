@@ -127,12 +127,13 @@ type t =
        ; source : (module Eio.Flow.SOURCE with type t = 'a)
        ; sink : (module Eio.Flow.SINK with type t = 'a)
        ; close : 'a -> unit
+       ; resource_store : 'a Eio.Resource_store.t
        ; ..>)
       -> t [@@unboxed]
 
 let raw (T (t, ops)) = ops#raw t
 
-let as_stream_socket (T (a, ops)) = Eio.Net.Stream_socket.T (a, ops)
+let as_stream_socket (T d) = Eio.Net.Stream_socket.T d
 
 let attach_to_switch t sw =
   let t = raw t in
@@ -145,6 +146,7 @@ let set_copy_method t v = (raw t).copy_method <- v
 
 let make ?pp label : t =
   let t = Mock_flow.make ?pp label in
+  let resource_store = Eio.Resource_store.create () in
   T
     (t, object
        method raw = Fun.id
@@ -152,4 +154,11 @@ let make ?pp label : t =
        method shutdown = (module Mock_flow : Eio.Flow.SHUTDOWN with type t = Mock_flow.t)
        method source = (module Mock_flow : Eio.Flow.SOURCE with type t = Mock_flow.t)
        method sink = (module Mock_flow : Eio.Flow.SINK with type t = Mock_flow.t)
+       method resource_store = resource_store
      end)
+
+module Cast = struct
+  let as_source (T t) = Eio.Flow.Source.T t
+  let as_sink (T t) = Eio.Flow.Sink.T t
+  let as_flow (T t) = Eio.Flow.T t
+end

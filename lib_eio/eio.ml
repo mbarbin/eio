@@ -13,6 +13,7 @@ module Pool = Pool
 module Executor_pool = Executor_pool
 module Exn = Exn
 module Resource = Resource
+module Resource_store = Resource_store
 module Buf_read = Buf_read
 module Flow = struct
   include Flow

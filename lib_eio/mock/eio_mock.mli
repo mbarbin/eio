@@ -101,6 +101,7 @@ module Flow : sig
          ; source : (module Eio.Flow.SOURCE with type t = 'a)
          ; sink : (module Eio.Flow.SINK with type t = 'a)
          ; close : 'a -> unit
+         ; resource_store : 'a Eio.Resource_store.t
          ; ..>)
         -> t [@@unboxed]
 
@@ -118,6 +119,11 @@ module Flow : sig
   val set_copy_method : t -> copy_method -> unit
   (** [set_copy_method t m] configures [t] to use the given method to read from
       a source during a copy operation. *)
+
+  module Cast : sig
+    val as_source : t -> Eio.Flow.Source.t
+    val as_sink : t -> Eio.Flow.Sink.t
+  end
 end
 
 (** Mock {!Eio.Net} networks and sockets. *)

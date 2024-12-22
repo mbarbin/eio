@@ -133,11 +133,11 @@ FOO=bar
 Inheriting file descriptors:
 
 ```ocaml
-let fd flow = Eio_unix.Resource.fd flow
+let fd flow = Eio_unix.Sink.fd flow
 let int_of_fd : Unix.file_descr -> int = Obj.magic
 let id flow = Eio_unix.Fd.use_exn "id" (fd flow) int_of_fd
 let read_all pipe =
-  let r = Eio.Buf_read.of_flow pipe ~max_size:1024 in
+  let r = Eio.Buf_read.of_flow (Eio_unix.Source.Cast.as_generic pipe) ~max_size:1024 in
   Eio.Buf_read.take_all r
 ```
 
@@ -155,8 +155,8 @@ let read_all pipe =
         ~env:[| "FOO=bar" |];
     ]
   in
-  Eio.Flow.close pipe_w;
-  let r = Eio.Buf_read.of_flow pipe_r ~max_size:1024 in
+  Eio_unix.Sink.close pipe_w;
+  let r = Eio.Buf_read.of_flow (Eio_unix.Source.Cast.as_generic pipe_r) ~max_size:1024 in
   traceln "Read: %S" (Eio.Buf_read.take_all r);
   Promise.await (Process.exit_status child);;
 +Read: "FOO=bar\n"
@@ -192,10 +192,10 @@ Swapping FDs (note: plain sh can't handle multi-digit FDs!):
         ~env:(Unix.environment ())
     ]
   in
-  Eio.Flow.close pipe1_w;
-  Eio.Flow.close pipe2_w;
-  Eio.Flow.close pipe3_w;
-  Eio.Flow.close pipe4_w;
+  Eio_unix.Sink.close pipe1_w;
+  Eio_unix.Sink.close pipe2_w;
+  Eio_unix.Sink.close pipe3_w;
+  Eio_unix.Sink.close pipe4_w;
   traceln "Pipe1: %S" (read_all pipe1_r);
   traceln "Pipe2: %S" (read_all pipe2_r);
   traceln "Pipe3: %S" (read_all pipe3_r);
@@ -224,7 +224,7 @@ Keeping an FD open:
         ~env:(Unix.environment ())
     ]
   in
-  Eio.Flow.close pipe1_w;
+  Eio_unix.Sink.close pipe1_w;
   traceln "Pipe1: %S" (read_all pipe1_r);
   Promise.await (Process.exit_status child);;
 +Pipe1: "one\n"

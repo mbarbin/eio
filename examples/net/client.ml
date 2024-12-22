@@ -13,7 +13,7 @@ let run ~net ~addr =
   let flow = Eio.Net.connect ~sw net addr in
   (* We use a buffered writer here so we can create the message in multiple
      steps but still send it efficiently as a single packet: *)
-  Write.with_flow (Eio.Net.Stream_socket.Cast.as_sink flow) @@ fun to_server ->
+  Write.with_sink (Eio.Net.Stream_socket.Cast.as_sink flow) @@ fun to_server ->
   Write.string to_server "Hello";
   Write.char to_server ' ';
   Write.string to_server "from client\n";

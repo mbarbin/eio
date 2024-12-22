@@ -110,6 +110,7 @@ type t =
        < source : (module Source.S with type t = 'a)
        ; sink : (module Sink.S with type t = 'a)
        ; shutdown : (module Shutdownable.S with type t = 'a)
+       ; resource_store : 'a Resource_store.t
        ; ..>)
       -> t [@@unboxed]
 
@@ -141,8 +142,23 @@ val close : [> `Close] r -> unit
 
 (* CR mbarbin: Review, think about the names for consistency. *)
 module Closable : sig
-  type closable_source = Closable_source : ('a * < source : (module Source.S with type t = 'a); close : 'a -> unit; ..>) -> closable_source [@@unboxed]
-  type closable_sink = Closable_sink : ('a * < sink : (module Sink.S with type t = 'a); close : 'a -> unit; ..>) -> closable_sink [@@unboxed]
+  type closable_source =
+    | Closable_source :
+        ('a *
+         < source : (module Source.S with type t = 'a)
+         ; close : 'a -> unit
+         ; resource_store : 'a Resource_store.t
+         ; ..>)
+        -> closable_source [@@unboxed]
+
+  type closable_sink =
+    | Closable_sink :
+        ('a *
+         < sink : (module Sink.S with type t = 'a)
+         ; close : 'a -> unit
+         ; resource_store : 'a Resource_store.t
+         ; ..>)
+        -> closable_sink [@@unboxed]
 
   val source : closable_source -> Source.t
   val sink : closable_sink -> Sink.t

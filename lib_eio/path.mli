@@ -148,9 +148,11 @@ val open_dir : sw:Switch.t -> t -> [< `Close | dir_ty] t'
 
     This can be passed to functions to grant access only to the subtree [t]. *)
 
-val with_open_dir : t -> ([< `Close | dir_ty] t' -> 'a) -> 'a
+val with_open_dir' : t -> ([< `Close | dir_ty] t' -> 'a) -> 'a
 (** [with_open_dir] is like [open_dir], but calls [fn dir] with the new directory and closes
     it automatically when [fn] returns (if it hasn't already been closed by then). *)
+
+val with_open_dir : t -> (t -> 'a) -> 'a
 
 val read_dir : t -> string list
 (** [read_dir t] reads directory entries for [t].

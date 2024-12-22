@@ -9,6 +9,7 @@ type t =
        ; write : (module Eio.File.WRITE with type t = 'a)
        ; fd : 'a -> Fd.t
        ; stream_socket : (module Stream_socket.S with type t = 'a)
+       ; resource_store : 'a Eio.Resource_store.t
        ; ..>)
       -> t [@@unboxed]
 
@@ -32,6 +33,7 @@ end
 
 module Pi = struct
   let make (type a) (module X : S with type t = a) (t : a) =
+    let resource_store = Eio.Resource_store.create () in
     let module X_no_fd = struct
       include X
       let copy t ~src =
@@ -47,6 +49,7 @@ module Pi = struct
          method write = (module X_no_fd : Eio.File.WRITE with type t = a)
          method fd = X.fd
          method stream_socket = (module X_no_fd : Stream_socket.S with type t = a)
+         method resource_store = resource_store
        end)
 end
 

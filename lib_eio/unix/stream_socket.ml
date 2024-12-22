@@ -6,6 +6,7 @@ type t =
        ; sink : (module Eio.Flow.SINK with type t = 'a)
        ; close : 'a -> unit
        ; fd : 'a -> Fd.t
+       ; resource_store : 'a Eio.Resource_store.t
        ; .. >)
       -> t [@@unboxed]
 
@@ -31,6 +32,7 @@ end
 
 module Pi = struct
   let make (type t) (module X : S with type t = t) (t : t) =
+    let resource_store = Eio.Resource_store.create () in
     T
       (t, object
          method close = X.close
@@ -38,5 +40,6 @@ module Pi = struct
          method source = (module X : Eio.Flow.SOURCE with type t = t)
          method sink = (module X : Eio.Flow.SINK with type t = t)
          method fd = X.fd
+         method resource_store = resource_store
        end)
 end

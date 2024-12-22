@@ -7,7 +7,6 @@ module type S = sig
   val fd : t -> Fd.t
 end
 
-
 type t =
   | T :
       ('a *
@@ -15,6 +14,7 @@ type t =
        ; unix_listening_socket : (module S with type t = 'a)
        ; close : 'a -> unit
        ; fd : 'a -> Fd.t
+       ; resource_store : 'a Eio.Resource_store.t
        ; ..>)
       -> t [@@unboxed]
 
@@ -26,8 +26,9 @@ let close (T (a, ops)) = ops#close a
 let fd (T (a, ops)) = ops#fd a
 
 module Pi = struct
-  (* CR mbarbin: Apply the staged scheme consistently all over. *)
+  (* CR mbarbin: Settle on the staged scheme consistently. *)
   let make (type a) (module X : S with type t = a) =
+    let resource_store = Eio.Resource_store.create () in
     let module Generic = struct
       include X
 
@@ -41,6 +42,7 @@ module Pi = struct
          method unix_listening_socket = (module X : S with type t = a)
          method close = X.close
          method fd = X.fd
+         method resource_store = resource_store
        end
       in
     fun (t : a) -> T (t, ops)

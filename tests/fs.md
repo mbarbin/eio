@@ -7,7 +7,6 @@
 ```
 
 ```ocaml
-
 module Int63 = Optint.Int63
 module Path = Eio.Path
 
@@ -256,7 +255,7 @@ Creating directories with nesting, symlinks, etc:
 
 ```ocaml
 let fake_dir : Eio.Fs.dir_ty r = Eio.Resource.T ((), Eio.Resource.handler [])
-let split path = Eio.Path.split (fake_dir, path) |> Option.map (fun ((_, dirname), basename) -> dirname, basename)
+let split path = Eio.Path.split' (fake_dir, path) |> Option.map (fun ((_, dirname), basename) -> dirname, basename)
 ```
 
 ```ocaml
@@ -580,8 +579,8 @@ Create a sandbox, write a file with it, then read it from outside:
 
 # Unconfined FS access
 
-We create a directory and chdir into it.
-Using `cwd` we can't access the parent, but using `fs` we can:
+We create a directory and chdir into it. Using `cwd` we can't access the parent,
+but using `fs` we can:
 
 ```ocaml
 # run ~clear:["fs-test"; "outside-cwd"] @@ fun env ->
@@ -724,8 +723,8 @@ We can get the Unix FD from the flow and use it directly:
 - : unit = ()
 ```
 
-We can also remove it from the flow completely and take ownership of it.
-In that case, `with_open_in` will no longer close it on exit:
+We can also remove it from the flow completely and take ownership of it. In that
+case, `with_open_in` will no longer close it on exit:
 
 ```ocaml
 # run @@ fun env ->
@@ -972,12 +971,13 @@ Exception: Failure "Simulated error".
 # run @@ fun env ->
   Eio.Path.with_open_out (env#cwd / "seek-test") ~create:(`If_missing 0o700) @@ fun file ->
   Eio.File.truncate file (Int63.of_int 10);
-  assert ((Eio.File.stat file).size = (Int63.of_int 10));
-  let pos = Eio.File.seek file (Int63.of_int 3) `Set in
+  let file_r = Eio.File.Rw.to_ro file in
+  assert ((Eio.File.stat file_r).size = (Int63.of_int 10));
+  let pos = Eio.File.seek file_r (Int63.of_int 3) `Set in
   traceln "seek from start: %a" Int63.pp pos;
-  let pos = Eio.File.seek file (Int63.of_int 2) `Cur in
+  let pos = Eio.File.seek file_r (Int63.of_int 2) `Cur in
   traceln "relative seek: %a" Int63.pp pos;
-  let pos = Eio.File.seek file (Int63.of_int (-1)) `End in
+  let pos = Eio.File.seek file_r (Int63.of_int (-1)) `End in
   traceln "seek from end: %a" Int63.pp pos;
   Eio.File.sync file;    (* (no way to check if this actually worked, but ensure it runs) *)
 +seek from start: 3
@@ -991,7 +991,9 @@ Exception: Failure "Simulated error".
 ```ocaml
 # run @@ fun env ->
   let base = fst env#cwd in
-  List.iter (fun (a, b) -> traceln "%S / %S = %S" a b (snd ((base, a) / b))) [
+  List.iter (fun (a, b) ->
+    let (Eio.Path (_, p)) = Path (base, a) / b in
+    traceln "%S / %S = %S" a b p) [
     "foo", "bar";
     "foo/", "bar";
     "foo", "/bar";

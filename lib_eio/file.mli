@@ -71,9 +71,11 @@ type ro = Ro : ('a *
   < read : (module READ with type t = 'a)
   ; source : (module Flow.SOURCE with type t = 'a)
   ; close : 'a -> unit
+  ; resource_store : 'a Resource_store.t
   ; .. >) -> ro [@@unboxed]
 (** A file opened for reading. *)
 
+(* CR mbarbin: Inconsistent cast interface. TODO: Settle. *)
 module Ro : sig
   val to_source : ro -> Flow.source
 end
@@ -84,6 +86,7 @@ type rw = Rw : ('a *
   ; close : 'a -> unit
   ; write : (module WRITE with type t = 'a)
   ; sink : (module Flow.SINK with type t = 'a)
+  ; resource_store : 'a Resource_store.t
   ; .. >) -> rw [@@unboxed]
 (** A file opened for reading and writing. *)
 

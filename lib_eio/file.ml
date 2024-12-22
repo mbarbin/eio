@@ -78,6 +78,7 @@ type ro = Ro : ('a *
   < read : (module READ with type t = 'a)
   ; source : (module Flow.SOURCE with type t = 'a)
   ; close : 'a -> unit
+  ; resource_store : 'a Resource_store.t
   ; .. >) -> ro [@@unboxed]
 
 module Ro = struct
@@ -90,6 +91,7 @@ type rw = Rw : ('a *
   ; close : 'a -> unit
   ; write : (module WRITE with type t = 'a)
   ; sink : (module Flow.SINK with type t = 'a)
+  ; resource_store : 'a Resource_store.t
   ; .. >) -> rw [@@unboxed]
 
 module Rw = struct
@@ -99,14 +101,17 @@ end
 
 module Pi = struct
   let ro (type t) (module X : READ with type t = t) (t : t) =
+    let resource_store = Resource_store.create () in
     Ro
       (t, object
          method source = (module X : Flow.SOURCE with type t = t)
          method read = (module X : READ with type t = t)
          method close = X.close
+         method resource_store = resource_store
        end)
 
   let rw (type t) (module X : WRITE with type t = t) (t : t) =
+    let resource_store = Resource_store.create () in
     Rw
       (t, object
          method source = (module X : Flow.SOURCE with type t = t)
@@ -114,6 +119,7 @@ module Pi = struct
          method close = X.close
          method sink = (module X : Flow.SINK with type t = t)
          method write = (module X : WRITE with type t = t)
+         method resource_store = resource_store
        end)
 end
 

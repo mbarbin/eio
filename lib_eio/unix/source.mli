@@ -3,6 +3,7 @@ type t =
       ('a *
        < close : 'a -> unit; fd : 'a -> Fd.t
        ; source : (module Eio.Flow.SOURCE with type t = 'a)
+       ; resource_store : 'a Eio.Resource_store.t
        ; .. >)
       -> t [@@unboxed]
 
