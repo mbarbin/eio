@@ -7,6 +7,11 @@ module type S = sig
   val fd : t -> Fd.t
 end
 
+(* CR mbarbin: I'm experimenting with both methods unix and generic,
+   built during [Pi.make] to make the casting function cheap. Low
+   confidence about this scheme at the moment, re-consider when
+   knowing more about use cases. *)
+
 type t =
   | T :
       ('a *

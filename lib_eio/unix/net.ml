@@ -81,6 +81,33 @@ type t =
          >)
       -> t [@@unboxed]
 
+(* CR mbarbin: This is temporary code that I use to be able to compile
+   some code that currently does not make use of [Eio_unix] specific
+   functionality. I would like to spend more time thinking about this
+   once I know more. *)
+module To_generic = struct
+  let project (Network (a, ops)) =
+    let module X = (val ops#network) in
+    let module G = struct
+      include X
+
+      let listen t ~reuse_addr ~reuse_port ~backlog ~sw stream =
+        let listening_socket = X.listen t ~reuse_addr ~reuse_port ~backlog ~sw stream in
+        Listening_socket.Cast.as_generic_listening_socket listening_socket
+
+      let connect t ~sw stream =
+        let stream_socket = X.connect t ~sw stream in
+        Stream_socket.Cast.as_generic_stream_socket stream_socket
+
+      let datagram_socket t ~reuse_addr ~reuse_port ~sw addr =
+        let datagram_socket = X.datagram_socket t ~reuse_addr ~reuse_port ~sw addr in
+        Datagram_socket.Cast.as_generic_datagram_socket datagram_socket
+    end in
+    Eio.Net.Pi.network (module G) a
+end
+
+let to_generic = To_generic.project
+
 module Pi = struct
   let make (type a) (module X : S with type t = a) (t : a) =
     Network (t, object method network = (module X : S with type t = a) end)

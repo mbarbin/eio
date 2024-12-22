@@ -66,4 +66,4 @@ let () =
   let finished = ref false in
   Fiber.both
     (fun () -> trace ~finished (env#mono_clock, 0.01) cursor)
-    (fun () -> main env#net; finished := true)
+    (fun () -> main (env#net |> Eio_unix.Net.to_generic); finished := true)

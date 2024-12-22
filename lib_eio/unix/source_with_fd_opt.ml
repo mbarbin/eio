@@ -21,3 +21,8 @@ let of_generic (Eio.Flow.Source (a, ops)) =
        method close = None
        method fd = None
      end)
+
+let fd (T (a, ops)) =
+  match ops#fd with
+  | None -> None
+  | Some fd -> Some (fd a)

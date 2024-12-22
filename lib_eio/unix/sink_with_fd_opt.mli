@@ -1,8 +1,11 @@
 type t =
     T :
       ('a *
-       < close : ('a -> unit) option; fd : ('a -> Fd.t) option;
-         sink : (module Eio.Flow.SINK with type t = 'a); .. >) -> t [@@unboxed]
+       < close : ('a -> unit) option
+       ; sink : (module Eio.Flow.SINK with type t = 'a)
+       ; fd : ('a -> Fd.t) option
+       ; .. >)
+      -> t [@@unboxed]
 
 module Cast :
 sig
@@ -10,3 +13,5 @@ sig
 end
 
 val of_generic : Eio.Flow.sink -> t
+
+val fd : t -> Fd.t option

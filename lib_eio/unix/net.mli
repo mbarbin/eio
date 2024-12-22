@@ -30,12 +30,14 @@ module type S = sig
 end
 
 type t =
-    Network :
+  | Network :
       ('a *
        < network : (module S with type t = 'a)
        ; ..
-       >)
+         >)
       -> t [@@unboxed]
+
+val to_generic : t -> Eio.Net.t
 
 module Pi : sig
   val make : (module S with type t = 'a) -> 'a -> t

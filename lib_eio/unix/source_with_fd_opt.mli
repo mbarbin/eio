@@ -1,11 +1,16 @@
 type t =
     T :
       ('a *
-       < close : ('a -> unit) option; fd : ('a -> Fd.t) option;
-         source : (module Eio.Flow.SOURCE with type t = 'a); .. >) -> 
-      t [@@unboxed]
-module Cast :
-  sig
-    val as_generic : t -> Eio.Flow.source
-         end
-    val of_generic : Eio.Flow.source -> t
+       < close : ('a -> unit) option
+       ; source : (module Eio.Flow.SOURCE with type t = 'a)
+       ; fd : ('a -> Fd.t) option
+       ; .. >)
+      -> t [@@unboxed]
+
+module Cast : sig
+  val as_generic : t -> Eio.Flow.source
+end
+
+val of_generic : Eio.Flow.source -> t
+
+val fd : t -> Fd.t option

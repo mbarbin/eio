@@ -13,12 +13,12 @@ let run_client sock =
        for _ = 1 to n_chunks do
          Eio.Flow.write (Eio_unix.Net.Stream_socket.Cast.as_sink sock) [chunk]
        done;
-       Eio.Flow.shutdown (Eio.Flow.Two_way sock) `Send
+       Eio.Flow.shutdown (Eio_unix.Net.Stream_socket.Cast.as_two_way sock) `Send
     )
     (fun () ->
        let chunk = Cstruct.create chunk_size in
        for _ = 1 to n_chunks do
-         Eio.Flow.read_exact (Eio.Flow.Source sock) chunk
+         Eio.Flow.read_exact (Eio_unix.Net.Stream_socket.Cast.as_source sock) chunk
        done
     )
 
@@ -37,8 +37,16 @@ let time name service =
 
 let run _env =
   [
-    time "default" (fun sock -> Eio.Flow.copy (Eio.Flow.Source sock) (Eio.Flow.Sink sock));
+    time "default" (fun sock ->
+      Eio.Flow.copy
+        (Eio_unix.Net.Stream_socket.Cast.as_source sock)
+        (Eio_unix.Net.Stream_socket.Cast.as_sink sock));
     time "buf_read" (fun sock ->
-        let r = Eio.Buf_read.of_flow (Eio.Flow.Source sock) ~initial_size:(64 * 1024) ~max_size:(64 * 1024) |> Eio.Buf_read.as_flow in
-        Eio.Flow.copy r (Eio.Flow.Sink sock));
+        let r =
+          Eio.Buf_read.of_flow
+            (Eio_unix.Net.Stream_socket.Cast.as_source sock)
+            ~initial_size:(64 * 1024) ~max_size:(64 * 1024)
+          |> Eio.Buf_read.as_flow
+        in
+        Eio.Flow.copy r (Eio_unix.Net.Stream_socket.Cast.as_sink sock));
   ]
