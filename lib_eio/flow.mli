@@ -8,81 +8,10 @@ open Std
 
 (** {2 Types} *)
 
-type 'a read_method = ..
+type 'a read_method = 'a Read_method.t = ..
 (** Sources can offer a list of ways to read them, in order of preference. *)
 
-(* CR mbarbin: Refactor the type names for consistency, same as in
-   unix eio. For example, source becomes Source.t, SOURCE becomes
-   Source.S, etc. Consider moving them to their own file if at all
-   possible (and reexport here). *)
-
-module type SOURCE = sig
-  type t
-  val read_methods : t read_method list
-  val single_read : t -> Cstruct.t -> int
-end
-
-type source = Source : ('a * < source : (module SOURCE with type t = 'a); ..>) -> source [@@unboxed]
-(** A readable flow provides a stream of bytes. *)
-
-module type SINK = sig
-  type t
-
-  val single_write : t -> Cstruct.t list -> int
-
-  val copy : t -> src:source -> unit
-  (** [copy t ~src] allows for optimising copy operations.
-
-        If you have no optimisations, you can use {!simple_copy} to implement this using {!single_write}. *)
-end
-
-type sink = Sink : ('a * < sink : (module SINK with type t = 'a); ..>) -> sink [@@unboxed]
-(** A writeable flow accepts a stream of bytes. *)
-
-type shutdown_command = [
-  | `Receive  (** Indicate that no more reads will be done *)
-  | `Send     (** Indicate that no more writes will be done *)
-  | `All      (** Indicate that no more reads or writes will be done *)
-]
-
-module type SHUTDOWN = sig
-  type t
-  val shutdown : t -> shutdown_command -> unit
-end
-
-type shutdown = Shutdown : ('a * < shutdown : (module SHUTDOWN with type t = 'a); ..>) -> shutdown [@@unboxed]
-
-module type TWO_WAY = sig
-  include SHUTDOWN
-  include SOURCE with type t := t
-  include SINK with type t := t
-end
-
 (** {2 Reading} *)
-
-val single_read : source -> Cstruct.t -> int
-(** [single_read src buf] reads one or more bytes into [buf].
-
-    It returns the number of bytes read (which may be less than the
-    buffer size even if there is more data to be read).
-
-    - Use {!read_exact} instead if you want to fill [buf] completely.
-    - Use {!Buf_read.line} to read complete lines.
-    - Use {!copy} to stream data directly from a source to a sink.
-
-    [buf] must not be zero-length.
-
-    @raise End_of_file if there is no more data to read *)
-
-val read_exact : source -> Cstruct.t -> unit
-(** [read_exact src dst] keeps reading into [dst] until it is full.
-    @raise End_of_file if the buffer could not be filled. *)
-
-val string_source : string -> source
-(** [string_source s] is a source that gives the bytes of [s]. *)
-
-val cstruct_source : Cstruct.t list -> source
-(** [cstruct_source cs] is a source that gives the bytes of [cs]. *)
 
 type 't read_method += Read_source_buffer of ('t -> (Cstruct.t list -> int) -> unit)
 (** If a source offers [Read_source_buffer rsb] then the user can call [rsb t fn]
@@ -93,51 +22,108 @@ type 't read_method += Read_source_buffer of ('t -> (Cstruct.t list -> int) -> u
 
     [fn] must not continue to use the buffers after it returns. *)
 
+module type Read_S = sig
+  type source
+
+  val single_read : source -> Cstruct.t -> int
+  (** [single_read src buf] reads one or more bytes into [buf].
+
+      It returns the number of bytes read (which may be less than the
+      buffer size even if there is more data to be read).
+
+      - Use {!read_exact} instead if you want to fill [buf] completely.
+      - Use {!Buf_read.line} to read complete lines.
+      - Use {!copy} to stream data directly from a source to a sink.
+
+      [buf] must not be zero-length.
+
+      @raise End_of_file if there is no more data to read *)
+
+  val read_exact : source -> Cstruct.t -> unit
+  (** [read_exact src dst] keeps reading into [dst] until it is full.
+      @raise End_of_file if the buffer could not be filled. *)
+end
+
+module Source = Source
+
+include Read_S with type source := Source.t
+
+val string_source : string -> Source.t
+(** [string_source s] is a source that gives the bytes of [s]. *)
+
+val cstruct_source : Cstruct.t list -> Source.t
+(** [cstruct_source cs] is a source that gives the bytes of [cs]. *)
+
 (** {2 Writing} *)
 
-val write : sink -> Cstruct.t list -> unit
-(** [write dst bufs] writes all bytes from [bufs].
+module type Write_S = sig
+  type source
+  type sink
 
-    You should not perform multiple concurrent writes on the same flow
-    (the output may get interleaved).
+  val write : sink -> Cstruct.t list -> unit
+  (** [write dst bufs] writes all bytes from [bufs].
 
-    This is a low level API. Consider using:
+      You should not perform multiple concurrent writes on the same flow
+      (the output may get interleaved).
 
-    - {!Buf_write} to combine multiple small writes.
-    - {!copy} for bulk transfers, as it allows some extra optimizations. *)
+      This is a low level API. Consider using:
 
-val single_write : sink -> Cstruct.t list -> int
-(** [single_write dst bufs] writes at least one byte from [bufs] and returns the number of bytes written. *)
+      - {!Buf_write} to combine multiple small writes.
+      - {!copy} for bulk transfers, as it allows some extra optimizations. *)
 
-val copy : source -> sink -> unit
-(** [copy src dst] copies data from [src] to [dst] until end-of-file. *)
+  val single_write : sink -> Cstruct.t list -> int
+  (** [single_write dst bufs] writes at least one byte from [bufs] and returns the number of bytes written. *)
 
-val copy_string : string -> sink -> unit
-(** [copy_string s = copy (string_source s)] *)
+  val copy : source -> sink -> unit
+  (** [copy src dst] copies data from [src] to [dst] until end-of-file. *)
 
-val buffer_sink : Buffer.t -> sink
+  val copy_string : string -> sink -> unit
+  (** [copy_string s = copy (string_source s)] *)
+end
+
+module Sink = Sink
+
+include Write_S with type source := Source.t and type sink := Sink.t
+
+val buffer_sink : Buffer.t -> Sink.t
 (** [buffer_sink b] is a sink that adds anything sent to it to [b].
 
     To collect data as a cstruct, use {!Buf_read} instead. *)
 
-(** {2 Bidirectional streams} *)
+type shutdown_command = Shutdownable.shutdown_command
 
-(* CR mbarbin: Maybe this is what should be named [Flow.t] under the new scheme. *)
-type two_way =
-  |  Two_way :
-      ('a *
-       < source : (module SOURCE with type t = 'a)
-       ; sink : (module SINK with type t = 'a)
-       ; shutdown : (module SHUTDOWN with type t = 'a)
-       ; ..>)
-      -> two_way [@@unboxed]
+module type SOURCE = Source.S
+module type SINK = Sink.S
+module type SHUTDOWN = Shutdownable.S
 
-module Cast : sig
-  val as_source : two_way -> source
-  val as_sink : two_way -> sink
+module type S = sig
+  include Shutdownable.S
+  include Source.S with type t := t
+  include Sink.S with type t := t
 end
 
-val shutdown : two_way -> shutdown_command -> unit
+(** {2 Bidirectional streams} *)
+
+type t =
+  |  T :
+      ('a *
+       < source : (module Source.S with type t = 'a)
+       ; sink : (module Sink.S with type t = 'a)
+       ; shutdown : (module Shutdownable.S with type t = 'a)
+       ; ..>)
+      -> t [@@unboxed]
+
+module Two_way : sig
+  include Read_S with type source := t
+  include Write_S with type source := t and type sink := t
+end
+
+module Cast : sig
+  val as_source : t -> Source.t
+  val as_sink : t -> Sink.t
+end
+
+val shutdown : t -> shutdown_command -> unit
 (** [shutdown t cmd] indicates that the caller has finished reading or writing [t]
     (depending on [cmd]).
 
@@ -155,11 +141,11 @@ val close : [> `Close] r -> unit
 
 (* CR mbarbin: Review, think about the names for consistency. *)
 module Closable : sig
-  type closable_source = Closable_source : ('a * < source : (module SOURCE with type t = 'a); close : 'a -> unit; ..>) -> closable_source [@@unboxed]
-  type closable_sink = Closable_sink : ('a * < sink : (module SINK with type t = 'a); close : 'a -> unit; ..>) -> closable_sink [@@unboxed]
+  type closable_source = Closable_source : ('a * < source : (module Source.S with type t = 'a); close : 'a -> unit; ..>) -> closable_source [@@unboxed]
+  type closable_sink = Closable_sink : ('a * < sink : (module Sink.S with type t = 'a); close : 'a -> unit; ..>) -> closable_sink [@@unboxed]
 
-  val source : closable_source -> source
-  val sink : closable_sink -> sink
+  val source : closable_source -> Source.t
+  val sink : closable_sink -> Sink.t
 end
 
 val close_source : Closable.closable_source -> unit
@@ -172,11 +158,15 @@ val close_sink : Closable.closable_sink -> unit
 
 module Pi : sig
   (* CR mbarbin: Once the module are refactored, move this into their own module. E.g. [Source.Pi.make]. *)
-  val source : (module SOURCE with type t = 't) -> 't -> source
-  val sink : (module SINK with type t = 't) -> 't -> sink
-  val shutdown : (module SHUTDOWN with type t = 't) -> 't -> shutdown
-  val two_way : (module TWO_WAY with type t = 'a) -> 'a -> two_way
-  val simple_copy : single_write:('t -> Cstruct.t list -> int) -> 't -> src:source -> unit
+  val make : (module S with type t = 'a) -> 'a -> t
+  val simple_copy : single_write:('t -> Cstruct.t list -> int) -> 't -> src:Source.t -> unit
   (** [simple_copy ~single_write] implements {!SINK}'s [copy] API using [single_write]. *)
 end
 
+(** {2 Type aliases} *)
+
+(* CR mbarbin: Decide what to do with the aliases. Could reduce breakages, but it's confusing
+   to have both available. *)
+
+type source = Source.t
+type sink = Sink.t

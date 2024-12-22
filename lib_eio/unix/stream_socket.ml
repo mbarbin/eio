@@ -10,9 +10,9 @@ type t =
       -> t [@@unboxed]
 
 module Cast = struct
-  let as_source (T t) = Eio.Flow.Source t
-  let as_sink (T t) = Eio.Flow.Sink t
-  let as_two_way (T t) = Eio.Flow.Two_way t
+  let as_source (T t) = Eio.Flow.Source.T t
+  let as_sink (T t) = Eio.Flow.Sink.T t
+  let as_two_way (T t) = Eio.Flow.T t
   let as_unix_source (T t) = Source.T t
   let as_unix_sink (T t) = Sink.T t
   let as_generic_stream_socket (T t) = Eio.Net.Stream_socket.T t

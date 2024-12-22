@@ -47,7 +47,7 @@ module Mock_flow = struct
 end
 
 let mock_flow chunks =
-  Eio.Flow.Pi.source (module Mock_flow) (ref chunks)
+  Eio.Flow.Source.make (module Mock_flow) (ref chunks)
 
 module Model = struct
   type t = string ref

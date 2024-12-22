@@ -81,7 +81,7 @@ type ro = Ro : ('a *
   ; .. >) -> ro [@@unboxed]
 
 module Ro = struct
-  let to_source (Ro r) = Flow.Source r
+  let to_source (Ro r) = Flow.Source.T r
 end
 
 type rw = Rw : ('a *
@@ -94,7 +94,7 @@ type rw = Rw : ('a *
 
 module Rw = struct
   let to_ro (Rw r) = Ro r
-  let to_sink (Rw r) = Flow.Sink r
+  let to_sink (Rw r) = Flow.Sink.T r
 end
 
 module Pi = struct

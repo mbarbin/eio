@@ -179,8 +179,8 @@ module Stream_socket = struct
         -> t [@@unboxed]
 
   module Cast = struct
-    let as_source (T t) = Flow.Source t
-    let as_sink (T t) = Flow.Sink t
+    let as_source (T t) = Flow.Source.T t
+    let as_sink (T t) = Flow.Sink.T t
   end
 
   let close (T (t, ops)) = ops#close t

@@ -71,7 +71,7 @@ module Impl = struct
 
   let copy t ~src =
     let src = Eio_unix.Source_with_fd_opt.Cast.as_generic src in
-    let Eio.Flow.Source (src_t, ops) = src in
+    let Eio.Flow.Source.T (src_t, ops) = src in
     let module Src = (val ops#source) in
     let rec aux = function
       | Eio.Flow.Read_source_buffer rsb :: _ -> copy_with_rsb (rsb src_t) t
@@ -133,4 +133,4 @@ module Secure_random = struct
   let read_methods = []
 end
 
-let secure_random = Eio.Flow.Pi.source (module Secure_random) ()
+let secure_random = Eio.Flow.Source.make (module Secure_random) ()

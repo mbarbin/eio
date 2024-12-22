@@ -147,7 +147,7 @@ module F = struct
 end
 
 let as_flow t =
-  Flow.Pi.source (module F) t
+  Flow.Source.make (module F) t
 
 let get t i =
   Bigarray.Array1.get t.buf (t.pos + i)

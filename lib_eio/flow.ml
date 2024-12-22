@@ -1,103 +1,40 @@
 type shutdown_command = [ `Receive | `Send | `All ]
 
-type 't read_method = ..
+type 'a read_method = 'a Read_method.t = ..
 type 't read_method += Read_source_buffer of ('t -> (Cstruct.t list -> int) -> unit)
 
-module type SOURCE = sig
-  type t
-  val read_methods : t read_method list
-  val single_read : t -> Cstruct.t -> int
+module type Read_S = sig
+  type source
+
+  val single_read : source -> Cstruct.t -> int
+  val read_exact : source -> Cstruct.t -> unit
 end
 
-type source = Source : ('a * < source : (module SOURCE with type t = 'a); ..>) -> source [@@unboxed]
+module type Write_S = sig
+  type source
+  type sink
 
-module type SINK = sig
-  type t
-  val single_write : t -> Cstruct.t list -> int
-  val copy : t -> src:source -> unit
+  val write : sink -> Cstruct.t list -> unit
+  val single_write : sink -> Cstruct.t list -> int
+  val copy : source -> sink -> unit
+  val copy_string : string -> sink -> unit
 end
 
-type sink = Sink : ('a * < sink : (module SINK with type t = 'a); ..>) -> sink [@@unboxed]
-
-module type SHUTDOWN = sig
-  type t
-  val shutdown : t -> shutdown_command -> unit
-end
-
-type shutdown = Shutdown : ('a * < shutdown : (module SHUTDOWN with type t = 'a); ..>) -> shutdown [@@unboxed]
-
-module type TWO_WAY = sig
-  include SHUTDOWN
-  include SOURCE with type t := t
-  include SINK with type t := t
-end
-
-type two_way = Two_way : ('a *
- < source : (module SOURCE with type t = 'a)
- ; sink : (module SINK with type t = 'a)
- ; shutdown : (module SHUTDOWN with type t = 'a)
- ; ..>) -> two_way [@@unboxed]
-
-module Pi = struct
-  let source (type t) (module X : SOURCE with type t = t) (t : t) =
-    Source (t, object method source = (module X : SOURCE with type t = t) end)
-
-  let sink (type t) (module X : SINK with type t = t) (t : t) =
-    Sink (t, object method sink = (module X : SINK with type t = t) end)
-
-  let shutdown (type t) (module X : SHUTDOWN with type t = t) (t : t) =
-    Shutdown (t, object method shutdown = (module X : SHUTDOWN with type t = t) end)
-
-  let two_way (type t) (module X : TWO_WAY with type t = t) (t : t) =
-    Two_way (t, object
-      method shutdown = (module X : SHUTDOWN with type t = t)
-      method source = (module X : SOURCE with type t = t)
-      method sink = (module X : SINK with type t = t)
-    end)
-
-  let simple_copy (type src) ~single_write t ~src:(Source (src, src_ops)) =
-    let rec write_all buf =
-      if not (Cstruct.is_empty buf) then (
-        let sent = single_write t [buf] in
-        write_all (Cstruct.shift buf sent)
-      )
-    in
-    let module Src = (val src_ops#source) in
-    try
-      let buf = Cstruct.create 4096 in
-      while true do
-        let got = Src.single_read src buf in
-        write_all (Cstruct.sub buf 0 got)
-      done
-    with End_of_file -> ()
-end
-
-let close = Resource.close
-
-module Closable = struct
-  type closable_source = Closable_source : ('a * < source : (module SOURCE with type t = 'a); close : 'a -> unit; ..>) -> closable_source [@@unboxed]
-  type closable_sink = Closable_sink : ('a * < sink : (module SINK with type t = 'a); close : 'a -> unit; ..>) -> closable_sink  [@@unboxed]
-
-  (* CR mbarbin: Adopt the [Cast] naming scheme. *)
-  let source (Closable_source s) = Source s
-  let sink (Closable_sink s) = Sink s
-end
-
-let close_source (Closable.Closable_source (a, ops)) = ops#close a
-
-let close_sink (Closable.Closable_sink (a, ops)) = ops#close a
-
-let single_read (Source (t, ops)) buf =
-  let module X = (val ops#source) in
-  let got = X.single_read t buf in
-  assert (got > 0 && got <= Cstruct.length buf);
-  got
-
-let rec read_exact t buf =
-  if Cstruct.length buf > 0 then (
-    let got = single_read t buf in
-    read_exact t (Cstruct.shift buf got)
-  )
+let simple_copy (type src) ~single_write t ~src:(Source.T (src, src_ops)) =
+  let rec write_all buf =
+    if not (Cstruct.is_empty buf) then (
+      let sent = single_write t [buf] in
+      write_all (Cstruct.shift buf sent)
+    )
+  in
+  let module Src = (val src_ops#source) in
+  try
+    let buf = Cstruct.create 4096 in
+    while true do
+      let got = Src.single_read src buf in
+      write_all (Cstruct.sub buf 0 got)
+    done
+  with End_of_file -> ()
 
 module Cstruct_source = struct
   type t = Cstruct.t list ref
@@ -127,7 +64,7 @@ module Cstruct_source = struct
 end
 
 let cstruct_source =
-  let ops = Pi.source (module Cstruct_source) in
+  let ops = Source.make (module Cstruct_source) in
   fun data -> ops (Cstruct_source.create data)
 
 module String_source = struct
@@ -148,29 +85,56 @@ module String_source = struct
   let create s = { s; offset = 0 }
 end
 
-let string_source : string -> source =
-  let ops = Pi.source (module String_source) in
+let string_source : string -> Source.t =
+  let ops = Source.make (module String_source) in
   fun s -> ops (String_source.create s)
 
-let single_write (Sink (t, ops)) bufs =
-  let module X = (val ops#sink) in
-  X.single_write t bufs
+module Make_read (X : sig type source val cast : source -> Source.t end) = struct
+  let single_read source buf =
+    let (Source.T (t, ops)) = X.cast source in
+    let module X = (val ops#source) in
+    let got = X.single_read t buf in
+    assert (got > 0 && got <= Cstruct.length buf);
+    got
 
-let write (Sink (t, ops)) bufs =
-  let module X = (val ops#sink) in
-  let rec aux = function
-    | [] -> ()
-    | bufs ->
-      let wrote = X.single_write t bufs in
-      aux (Cstruct.shiftv bufs wrote)
-  in
-  aux bufs
+  let rec read_exact t buf =
+    if Cstruct.length buf > 0 then (
+      let got = single_read t buf in
+      read_exact t (Cstruct.shift buf got)
+    )
+end
 
-let copy src (Sink (t, ops)) =
-  let module X = (val ops#sink) in
-  X.copy t ~src
+module Make_write (X : sig
+    type source
+    type sink
+    val cast_source : source -> Source.t
+    val cast_sink : sink -> Sink.t
+  end) = struct
 
-let copy_string s = copy (string_source s)
+  let single_write sink bufs =
+    let (Sink.T (t, ops)) = X.cast_sink sink in
+    let module X = (val ops#sink) in
+    X.single_write t bufs
+
+  let write sink bufs =
+    let (Sink.T (t, ops)) = X.cast_sink sink in
+    let module X = (val ops#sink) in
+    let rec aux = function
+      | [] -> ()
+      | bufs ->
+        let wrote = X.single_write t bufs in
+        aux (Cstruct.shiftv bufs wrote)
+    in
+    aux bufs
+
+  let copy_src src sink =
+    let (Sink.T (t, ops)) = X.cast_sink sink in
+    let module S = (val ops#sink) in
+    S.copy t ~src
+
+  let copy src sink = copy_src (X.cast_source src) sink
+  let copy_string s = copy_src (string_source s)
+end
 
 module Buffer_sink = struct
   type t = Buffer.t
@@ -180,18 +144,98 @@ module Buffer_sink = struct
     List.iter (fun buf -> Buffer.add_bytes t (Cstruct.to_bytes buf)) bufs;
     Buffer.length t - old_length
 
-  let copy t ~src = Pi.simple_copy ~single_write t ~src
+  let copy t ~src = simple_copy ~single_write t ~src
 end
 
 let buffer_sink =
-  let ops = Pi.sink (module Buffer_sink) in
+  let ops = Sink.make (module Buffer_sink) in
   fun b -> ops b
 
-let shutdown (Two_way (t, ops)) cmd =
+module Source = Source
+
+include Make_read (struct
+    type source = Source.t
+    let cast source = source
+  end)
+
+module Sink = Sink
+
+include Make_write (struct
+    type source = Source.t
+    type sink = Sink.t
+    let cast_source source = source
+    let cast_sink sink = sink
+  end)
+
+module type SOURCE = Source.S
+module type SINK = Sink.S
+
+module type SHUTDOWN = sig
+  type t
+  val shutdown : t -> shutdown_command -> unit
+end
+
+module type S = sig
+  type t
+  include Shutdownable.S with type t := t
+  include Source.S with type t := t
+  include Sink.S with type t := t
+end
+
+type t = T : ('a *
+ < source : (module Source.S with type t = 'a)
+ ; sink : (module Sink.S with type t = 'a)
+ ; shutdown : (module Shutdownable.S with type t = 'a)
+ ; ..>) -> t [@@unboxed]
+
+module Cast = struct
+  let as_source (T t) = Source.T t
+  let as_sink (T t) = Sink.T t
+end
+
+module Pi = struct
+  let make (type t) (module X : S with type t = t) (t : t) =
+    T (t, object
+      method shutdown = (module X : Shutdownable.S with type t = t)
+      method source = (module X : Source.S with type t = t)
+      method sink = (module X : Sink.S with type t = t)
+    end)
+
+  let simple_copy = simple_copy
+end
+
+module Two_way = struct
+  include Make_read (struct
+      type source = t
+      let cast = Cast.as_source
+    end)
+
+  include Make_write (struct
+      type source = t
+      type sink = t
+      let cast_source = Cast.as_source
+      let cast_sink = Cast.as_sink
+    end)
+end
+
+let close = Resource.close
+
+module Closable = struct
+  type closable_source = Closable_source : ('a * < source : (module Source.S with type t = 'a); close : 'a -> unit; ..>) -> closable_source [@@unboxed]
+  type closable_sink = Closable_sink : ('a * < sink : (module Sink.S with type t = 'a); close : 'a -> unit; ..>) -> closable_sink  [@@unboxed]
+
+  (* CR mbarbin: Adopt the [Cast] naming scheme. *)
+  let source (Closable_source s) = Source.T s
+  let sink (Closable_sink s) = Sink.T s
+end
+
+let close_source (Closable.Closable_source (a, ops)) = ops#close a
+
+let close_sink (Closable.Closable_sink (a, ops)) = ops#close a
+
+let shutdown (T (t, ops)) cmd =
   let module X = (val ops#shutdown) in
   X.shutdown t cmd
 
-module Cast = struct
-  let as_source (Two_way t) = Source t
-  let as_sink (Two_way t) = Sink t
-end
+type source = Source.t
+type sink = Sink.t

@@ -11,9 +11,9 @@ type t =
       -> t [@@unboxed]
 
 module Cast = struct
-      let as_generic (T (a, ops)) = Eio.Flow.Source (a, ops)
+      let as_generic (T (a, ops)) = Eio.Flow.Source.T (a, ops)
 end
-let of_generic (Eio.Flow.Source (a, ops)) =
+let of_generic (Eio.Flow.Source.T (a, ops)) =
   T
     (a,
      object

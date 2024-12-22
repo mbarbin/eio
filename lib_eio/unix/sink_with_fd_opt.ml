@@ -8,10 +8,10 @@ type t =
       -> t [@@unboxed]
 
 module Cast = struct
-  let as_generic (T (a, ops)) = Eio.Flow.Sink (a, ops)
+  let as_generic (T a) = Eio.Flow.Sink.T a
 end
 
-let of_generic (Eio.Flow.Sink (a, ops)) =
+let of_generic (Eio.Flow.Sink.T (a, ops)) =
   T
     (a,
      object
