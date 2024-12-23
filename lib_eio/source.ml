@@ -4,17 +4,20 @@ module type S = sig
   val single_read : t -> Cstruct.t -> int
 end
 
-type t =
-  | T :
-      ('a *
-       < source : (module S with type t = 'a)
-       ; resource_store : 'a Resource_store.t
-       ; ..>)
-      -> t [@@unboxed]
+class type ['a] source = object
+  method source : (module S with type t = 'a)
+  method resource_store : 'a Resource_store.t
+end
+
+type ('a, 'r) t =
+  ('a *
+   < source : (module S with type t = 'a)
+   ; resource_store : 'a Resource_store.t
+   ; ..> as 'r)
 
 let make (type a) (module X : S with type t = a) (t : a) =
   let resource_store = Resource_store.create () in
-  T (t, object
-       method source = (module X : S with type t = a)
-       method resource_store = resource_store
-     end)
+  (t, object
+     method source = (module X : S with type t = a)
+     method resource_store = resource_store
+   end)

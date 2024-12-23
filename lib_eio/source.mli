@@ -6,12 +6,15 @@ module type S = sig
   val single_read : t -> Cstruct.t -> int
 end
 
-type t =
-  | T :
-      ('a *
-       < source : (module S with type t = 'a)
-       ; resource_store : 'a Resource_store.t
-       ; ..>)
-      -> t [@@unboxed]
+class type ['a] source = object
+  method source : (module S with type t = 'a)
+  method resource_store : 'a Resource_store.t
+end
 
-val make : (module S with type t = 'a) -> 'a -> t
+type ('a, 'r) t =
+  ('a *
+   < source : (module S with type t = 'a)
+   ; resource_store : 'a Resource_store.t
+   ; ..> as 'r)
+
+val make : (module S with type t = 'a) -> 'a -> ('a, 'a * 'a source) t
