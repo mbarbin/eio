@@ -67,7 +67,7 @@ type ('a, 'r) t =
     ; raw : 'a -> Impl.t
     ; ..> as 'r))
 
-let raw (type a) ((t, ops) : a t) = ops#raw t
+let raw (type a) ((t, ops) : (a, _) t) = ops#raw t
 
 let make : string -> _ t =
   let ops =

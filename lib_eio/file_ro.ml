@@ -24,7 +24,7 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a file_ro) t
 
-type r = T : 'a t' -> r
+type r = T : 'a t' -> r [@@unboxed]
 
 let make (type t) (module X : S with type t = t) (t : t) =
   let resource_store = Resource_store.create () in

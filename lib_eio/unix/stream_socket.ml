@@ -29,18 +29,7 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a stream_socket) t
 
-type r = T : 'a t' -> r
-
-(* {[
-     module Cast = struct
-       let as_source (T t) = Eio.Flow.Source.T t
-       let as_sink (T t) = Eio.Flow.Sink.T t
-       let as_two_way (T t) = Eio.Flow.T t
-       let as_unix_source (T t) = Source.T t
-       let as_unix_sink (T t) = Sink.T t
-       let as_generic (T t) = Eio.Net.Stream_socket.T t
-     end
-   ]} *)
+type r = T : 'a t' -> r [@@unboxed]
 
 let make (type t) (module X : S with type t = t) (t : t) =
   let resource_store = Eio.Resource_store.create () in
@@ -57,3 +46,20 @@ let make (type t) (module X : S with type t = t) (t : t) =
 
 let close (type a) ((a, ops) : (a, _) t) = ops#close a
 let fd (type a) ((a, ops) : (a, _) t) = ops#fd a
+
+(* {[
+     module Cast = struct
+       let as_source (T t) = Eio.Flow.Source.T t
+       let as_sink (T t) = Eio.Flow.Sink.T t
+       let as_two_way (T t) = Eio.Flow.T t
+       let as_unix_source (T t) = Source.T t
+       let as_unix_sink (T t) = Sink.T t
+       let as_generic (T t) = Eio.Net.Stream_socket.T t
+     end
+   ]} *)
+
+module Cast = struct
+  let as_generic (T (a, ops)) =
+    Eio.Net.Stream_socket.T
+      (a, (ops :> _ Eio.Net.Stream_socket.stream_socket))
+end

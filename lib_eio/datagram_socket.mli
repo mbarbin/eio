@@ -22,7 +22,7 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a datagram_socket) t
 
-type r = T : 'a t' -> r
+type r = T : 'a t' -> r [@@unboxed]
 
 val make : (module S with type t = 'a) -> 'a -> 'a t'
 

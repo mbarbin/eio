@@ -24,15 +24,15 @@ module type MGR_unix = sig
   val pipe :
     t ->
     sw:Switch.t ->
-    Source.t * Sink.t
+    Source.r * Sink.r
 
   val spawn :
     t ->
     sw:Switch.t ->
     ?cwd:Eio.Path.t ->
-    ?stdin:Eio.Flow.Source.t ->
-    ?stdout:Eio.Flow.Sink.t ->
-    ?stderr:Eio.Flow.Sink.t ->
+    ?stdin:_ Eio.Flow.Source.t ->
+    ?stdout:_ Eio.Flow.Sink.t ->
+    ?stderr:_ Eio.Flow.Sink.t ->
     ?env:string array ->
     ?executable:string ->
     string list ->

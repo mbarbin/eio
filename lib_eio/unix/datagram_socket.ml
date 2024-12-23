@@ -23,8 +23,7 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a datagram_socket) t
 
-type r = T : 'a t' -> r
-
+type r = T : 'a t' -> r [@@unboxed]
 
 let make (type a) (module X : S with type t = a) (t : a) =
   let resource_store = Eio.Resource_store.create () in
@@ -40,5 +39,10 @@ let make (type a) (module X : S with type t = a) (t : a) =
 let close (type a) ((a, ops) : (a, _) t) = ops#close a
 let fd (type a) ((a, ops) : (a, _) t) = ops#fd a
 
-
-
+module Cast = struct
+  let as_generic (T (a, ops)) =
+    (* CR mbarbin: Is it possible to cast the tuple directly? (and
+       avoid the allocation). *)
+    Eio.Net.Datagram_socket.T
+      (a, (ops :> _ Eio.Net.Datagram_socket.datagram_socket))
+end

@@ -35,22 +35,22 @@ module Stream_socket = Stream_socket
 
 module Listening_socket = Listening_socket
 
-type 'a connection_handler = 'a Stream_socket.t' -> Sockaddr.stream -> unit
+type connection_handler = Stream_socket.r -> Sockaddr.stream -> unit
 
 module Datagram_socket = Datagram_socket
 
 module type NETWORK = sig
   type t
 
-  val listen : t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t -> Sockaddr.stream -> Listening_socket.t
-  val connect : t -> sw:Switch.t -> Sockaddr.stream -> _ Stream_socket.t
+  val listen : t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t -> Sockaddr.stream -> Listening_socket.r
+  val connect : t -> sw:Switch.t -> Sockaddr.stream -> Stream_socket.r
   val datagram_socket :
     t
     -> reuse_addr:bool
     -> reuse_port:bool
     -> sw:Switch.t
     -> [Sockaddr.datagram | `UdpV4 | `UdpV6]
-    -> _ Datagram_socket.t
+    -> Datagram_socket.r
 
   val getaddrinfo : t -> service:string -> string -> Sockaddr.t list
   val getnameinfo : t -> Sockaddr.t -> (string * string)
@@ -75,11 +75,11 @@ let accept (type a) ~sw ((t, ops) : (a, _) Listening_socket.t) =
 
 let accept_fork ~sw (t : _ Listening_socket.t) ~on_error handle =
   let child_started = ref false in
-  let (Stream_socket.T flow), addr = accept ~sw t in
+  let ((Stream_socket.T flow) as stream_socket), addr = accept ~sw t in
   Fun.protect ~finally:(fun () -> if !child_started = false then Stream_socket.close flow)
     (fun () ->
        Fiber.fork ~sw (fun () ->
-           match child_started := true; handle flow addr with
+           match child_started := true; handle stream_socket addr with
            | x -> Stream_socket.close flow; x
            | exception (Cancel.Cancelled _ as ex) ->
              Stream_socket.close flow;
@@ -90,15 +90,15 @@ let accept_fork ~sw (t : _ Listening_socket.t) ~on_error handle =
          )
     )
 
-let listening_addr (Listening_socket.T (t, ops)) =
+let listening_addr (type a) ((t, ops) : (a, _) Listening_socket.t) =
   let module X = (val ops#listening_socket) in
   X.listening_addr t
 
-let send (Datagram_socket.T (t, ops)) ?dst bufs =
+let send (type a) ((t, ops) : (a, _) Datagram_socket.t) ?dst bufs =
   let module X = (val ops#datagram_socket) in
   X.send t ?dst bufs
 
-let recv (Datagram_socket.T (t, ops)) buf =
+let recv (type a) ((t, ops) : (a, _) Datagram_socket.t) buf =
   let module X = (val ops#datagram_socket) in
   X.recv t buf
 

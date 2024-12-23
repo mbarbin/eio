@@ -1,7 +1,7 @@
 module type S = sig
   type t
 
-  val accept : t -> sw:Eio.Switch.t -> _ Stream_socket.t * Eio.Net.Sockaddr.stream
+  val accept : t -> sw:Eio.Switch.t -> Stream_socket.r * Eio.Net.Sockaddr.stream
   val close : t -> unit
   val listening_addr : t -> Eio.Net.Sockaddr.stream
   val fd : t -> Fd.t
@@ -26,7 +26,7 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a listening_socket) t
 
-type r = T : 'a t' -> r
+type r = T : 'a t' -> r [@@unboxed]
 
 let make (type a) (module X : S with type t = a) =
   (* CR mbarbin: Settle on the staged scheme consistently. *)
@@ -34,10 +34,10 @@ let make (type a) (module X : S with type t = a) =
   Eio.Resource_store.set resource_store ~key:Fd.key.key ~data:X.fd;
   let module Generic : Eio.Net.Listening_socket.S with type t = a = struct
     include X
-    
+
     let accept t ~sw =
-      let stream_socket, stream = X.accept t ~sw in
-      (Eio.Net.Stream_socket.T stream_socket, stream
+      let (socket, stream) = X.accept t ~sw in
+      Stream_socket.Cast.as_generic socket, stream
   end in
   let ops =
     object
@@ -52,3 +52,9 @@ let make (type a) (module X : S with type t = a) =
 
 let close (type a) ((a, ops) : (a, _) t) = ops#close a
 let fd (type a) ((a, ops) : (a, _) t) = ops#fd a
+
+module Cast = struct
+  let as_generic (T (a, ops)) =
+    Eio.Net.Listening_socket.T
+      (a, (ops :> _ Eio.Net.Listening_socket.listening_socket))
+end

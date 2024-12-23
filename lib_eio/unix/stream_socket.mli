@@ -29,9 +29,12 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a stream_socket) t
 
-type r = T : 'a t' -> r
+type r = T : 'a t' -> r [@@unboxed]
 
 val make : (module S with type t = 'a) -> 'a -> 'a t'
+
+val close : _ t -> unit
+val fd : _ t -> Fd.t
 
 (* CR mbarbin: I wish to expose casters so it is more discoverable what is possible.
    Look into this consistently:
@@ -48,5 +51,6 @@ val make : (module S with type t = 'a) -> 'a -> 'a t'
    ]}
 *)
 
-val close : _ t -> unit
-val fd : _ t -> Fd.t
+module Cast : sig
+  val as_generic : r -> Eio.Net.Stream_socket.r
+end

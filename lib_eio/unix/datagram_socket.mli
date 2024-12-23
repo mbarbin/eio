@@ -23,9 +23,13 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a datagram_socket) t
 
-type r = T : 'a t' -> r
+type r = T : 'a t' -> r [@@unboxed]
 
 val make : (module S with type t = 'a) -> 'a -> 'a t'
 
 val close : _ t -> unit
 val fd : _ t -> Fd.t
+
+module Cast : sig
+  val as_generic : r -> Eio.Net.Datagram_socket.r
+end

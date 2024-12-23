@@ -27,7 +27,7 @@ let sockaddr_of_unix_datagram = function
     let host = Ipaddr.of_unix host in
     `Udp (host, port)
 
-let send_msg (Stream_socket.T (t, ops)) ?(fds=[]) bufs =
+let send_msg (type a) ((t, ops) : (a, _) Stream_socket.t) ?(fds=[]) bufs =
   let module X = (val ops#stream_socket) in
   let rec aux ~fds bufs =
     let sent = X.send_msg t ~fds bufs in
@@ -37,7 +37,7 @@ let send_msg (Stream_socket.T (t, ops)) ?(fds=[]) bufs =
   in
   aux ~fds bufs
 
-let recv_msg_with_fds (Stream_socket.T (t, ops)) ~sw ~max_fds bufs =
+let recv_msg_with_fds (type a) ((t, ops) : (a, _) Stream_socket.t) ~sw ~max_fds bufs =
   let module X = (val ops#stream_socket) in
   X.recv_msg_with_fds t ~sw ~max_fds bufs
 
@@ -57,9 +57,9 @@ module type S = sig
 
   val listen :
     t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t ->
-    Eio.Net.Sockaddr.stream -> Listening_socket.t
+    Eio.Net.Sockaddr.stream -> Listening_socket.r
 
-  val connect : t -> sw:Switch.t -> Eio.Net.Sockaddr.stream -> Stream_socket.t
+  val connect : t -> sw:Switch.t -> Eio.Net.Sockaddr.stream -> Stream_socket.r
 
   val datagram_socket :
     t
@@ -67,7 +67,7 @@ module type S = sig
     -> reuse_port:bool
     -> sw:Switch.t
     -> [Eio.Net.Sockaddr.datagram | `UdpV4 | `UdpV6]
-    -> Datagram_socket.t
+    -> Datagram_socket.r
 
   val getaddrinfo : t -> service:string -> string -> Eio.Net.Sockaddr.t list
   val getnameinfo : t -> Eio.Net.Sockaddr.t -> (string * string)
@@ -99,7 +99,7 @@ module To_generic (X : S) : Eio.Net.NETWORK with type t = X.t = struct
     Datagram_socket.Cast.as_generic datagram_socket
 end
 
-let accept ~sw (Listening_socket.T (t, ops)) =
+let accept (type a) ~sw ((t, ops) : (a, _) Listening_socket.t) =
   let module X = (val ops#unix_listening_socket) in
   X.accept t ~sw
 
@@ -126,13 +126,13 @@ end
 [@@@alert "-unstable"]
 
 type _ Effect.t +=
-  | Import_socket_stream : Switch.t * bool * Unix.file_descr -> Stream_socket.t Effect.t
-  | Import_socket_listening : Switch.t * bool * Unix.file_descr -> Listening_socket.t Effect.t
-  | Import_socket_datagram : Switch.t * bool * Unix.file_descr -> Datagram_socket.t Effect.t
+  | Import_socket_stream : Switch.t * bool * Unix.file_descr -> Stream_socket.r Effect.t
+  | Import_socket_listening : Switch.t * bool * Unix.file_descr -> Listening_socket.r Effect.t
+  | Import_socket_datagram : Switch.t * bool * Unix.file_descr -> Datagram_socket.r Effect.t
   | Socketpair_stream : Switch.t * Unix.socket_domain * int ->
-      (Stream_socket.t * Stream_socket.t) Effect.t
+      (Stream_socket.r * Stream_socket.r) Effect.t
   | Socketpair_datagram : Switch.t * Unix.socket_domain * int ->
-      (Datagram_socket.t * Datagram_socket.t) Effect.t
+      (Datagram_socket.r * Datagram_socket.r) Effect.t
 
 let import_socket_stream ~sw ~close_unix fd =
   Effect.perform (Import_socket_stream (sw, close_unix, fd))

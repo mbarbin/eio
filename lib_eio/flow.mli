@@ -40,20 +40,10 @@ val read_exact : _ Source.t -> Cstruct.t -> unit
 (** [read_exact src dst] keeps reading into [dst] until it is full.
       @raise End_of_file if the buffer could not be filled. *)
 
-(* CR mbarbin: Possibly it is better to return a Source.packed for
-   these constructors. *)
-module String_source : sig
-  type t
-end
-
-val string_source : string -> String_source.t Source.t'
+val string_source : string -> Source.r
 (** [string_source s] is a source that gives the bytes of [s]. *)
 
-module Cstruct_source : sig
-  type t
-end
-
-val cstruct_source : Cstruct.t list -> Cstruct_source.t Source.t'
+val cstruct_source : Cstruct.t list -> Source.r
 (** [cstruct_source cs] is a source that gives the bytes of [cs]. *)
 
 (** {2 Writing} *)
@@ -91,21 +81,32 @@ module type SOURCE = Source.S
 module type SINK = Sink.S
 module type SHUTDOWN = Shutdownable.S
 
+(** {2 Bidirectional streams} *)
+
 module type S = sig
   include Shutdownable.S
   include Source.S with type t := t
   include Sink.S with type t := t
 end
 
-(** {2 Bidirectional streams} *)
+class type ['a] flow = object
+  method source : (module Source.S with type t = 'a)
+  method sink : (module Sink.S with type t = 'a)
+  method shutdown : (module Shutdownable.S with type t = 'a)
+  method resource_store : 'a Resource_store.t
+end
 
 type ('a, 'r) t =
   ('a *
-   < source : (module Source.S with type t = 'a)
-   ; sink : (module Sink.S with type t = 'a)
-   ; shutdown : (module Shutdownable.S with type t = 'a)
-   ; resource_store : 'a Resource_store.t
-   ; ..> as 'r)
+   (< source : (module Source.S with type t = 'a)
+    ; sink : (module Sink.S with type t = 'a)
+    ; shutdown : (module Shutdownable.S with type t = 'a)
+    ; resource_store : 'a Resource_store.t
+    ; ..> as 'r))
+
+type 'a t' = ('a, 'a flow) t
+
+type r = T : 'a t' -> r [@@unboxed]
 
 val shutdown : _ t -> shutdown_command -> unit
 (** [shutdown t cmd] indicates that the caller has finished reading or writing [t]
@@ -119,38 +120,51 @@ val shutdown : _ t -> shutdown_command -> unit
     Flows are usually attached to switches and closed automatically when the switch
     finishes. However, it can be useful to close them sooner manually in some cases. *)
 
-(* CR mbarbin: Review, think about the names for consistency. *)
-type ('a, 'r) closable_source =
-  ('a *
-   < source : (module Source.S with type t = 'a)
-   ; close : 'a -> unit
-   ; resource_store : 'a Resource_store.t
-   ; ..> as 'r)
+module Closable_source : sig
+  class type ['a] closable_source = object
+    method source : (module Source.S with type t = 'a)
+    method close : 'a -> unit
+    method resource_store : 'a Resource_store.t
+  end
 
-type ('a, 'r) closable_sink =
-  ('a *
-   < sink : (module Sink.S with type t = 'a)
-   ; close : 'a -> unit
-   ; resource_store : 'a Resource_store.t
-   ; ..> as 'r)
+  type ('a, 'r) t =
+    ('a *
+     (< source : (module Source.S with type t = 'a)
+      ; close : 'a -> unit
+      ; resource_store : 'a Resource_store.t
+      ; ..> as 'r))
 
-val close_source : _ closable_source -> unit
-(** [close_source src] closes the source. *)
+  type 'a t' = ('a, 'a closable_source) t
 
-val close_sink : _ closable_sink -> unit
-(** [close_sink dst] closes the sink. *)
+  type r = T : 'a t' -> r [@@unboxed]
+end
+
+module Closable_sink : sig
+  class type ['a] closable_sink = object
+    method sink : (module Sink.S with type t = 'a)
+    method close : 'a -> unit
+    method resource_store : 'a Resource_store.t
+  end
+
+  type ('a, 'r) t =
+    ('a *
+     (< sink : (module Sink.S with type t = 'a)
+      ; close : 'a -> unit
+      ; resource_store : 'a Resource_store.t
+      ; ..> as 'r))
+
+  type 'a t' = ('a, 'a closable_sink) t
+
+  type r = T : 'a t' -> r [@@unboxed]
+end
+
+val close : _ Closable.t -> unit
 
 (** {2 Provider Interface} *)
 
 module Pi : sig
   (* CR mbarbin: Perhaps this should simply be [make] at the toplevel of the module. *)
-  val make : (module S with type t = 'a) -> 'a ->
-    ('a, 'a *
-     < source : (module Source.S with type t = 'a)
-     ; sink : (module Sink.S with type t = 'a)
-     ; shutdown : (module Shutdownable.S with type t = 'a)
-     ; resource_store : 'a Resource_store.t
-     >) t
+  val make : (module S with type t = 'a) -> 'a -> 'a t'
 
   val simple_copy : single_write:('t -> Cstruct.t list -> int) -> 't -> src:_ Source.t -> unit
   (** [simple_copy ~single_write] implements {!SINK}'s [copy] API using [single_write]. *)
@@ -158,8 +172,11 @@ end
 
 (** {2 Type aliases} *)
 
-(* CR mbarbin: Decide what to do with the aliases. Could reduce breakages, but it's confusing
-   to have both available. *)
+(* CR mbarbin: Decide what to do with the aliases. Could reduce
+   breakages, but it's confusing to have both available. *)
+
+type ('a, 'b) closable_source = ('a, 'b) Closable_source.t
+type ('a, 'b) closable_sink = ('a, 'b) Closable_sink.t
 
 type ('a, 'r) source = ('a, 'r) Source.t
 type ('a, 'r) sink = ('a, 'r) Sink.t

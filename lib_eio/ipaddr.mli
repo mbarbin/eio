@@ -27,8 +27,6 @@
   (** [pp] formats IP addresses.
       For IPv6 addresses, it follows {{:http://tools.ietf.org/html/rfc5952}}. *)
 
-val pp_for_uri : Format.formatter -> string -> unit
-
   type v4v6 = [`V4 | `V6] t
 
   val fold :
@@ -37,6 +35,8 @@ val pp_for_uri : Format.formatter -> string -> unit
     [< `V4 | `V6] t ->
     'a
   (** [fold ~v4 ~v6 t] is [v4 t] if [t] is an IPv4 address, or [v6 t] if it's an IPv6 address. *)
+
+    val pp_for_uri : [< `V4 | `V6] t Fmt.t
 
   (** {2 Interoperability}
 

@@ -54,7 +54,7 @@ module type MGR = sig
   val pipe :
     t ->
     sw:Switch.t ->
-    _ Flow.closable_source * _ Flow.closable_sink
+    Flow.Closable_source.r * Flow.Closable_sink.r
 
   val spawn :
     t ->
@@ -147,12 +147,12 @@ let pipe ~sw (Mgr (v, ops)) =
 
 let parse_out (t : mgr) parse ?cwd ?stdin ?stderr ?is_success ?env ?executable args =
   Switch.run ~name:"Process.parse_out" @@ fun sw ->
-  let r, w = pipe t ~sw in
+  let (Flow.Closable_source.T r), (Flow.Closable_sink.T w) = pipe t ~sw in
   try
     let child = spawn ~sw t ?cwd ?stdin ~stdout:w ?stderr ?env ?executable args in
-    Flow.close_sink w;
+    Flow.close w;
     let output = Buf_read.parse_exn parse r ~max_size:max_int in
-    Flow.close_source r;
+    Flow.close r;
     await_exn ?is_success child;
     output
   with Exn.Io _ as ex ->

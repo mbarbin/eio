@@ -15,8 +15,12 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a sink) t
 
-type r = T : 'a t' -> r
+type r = T : 'a t' -> r [@@unboxed]
 
 val close : _ t -> unit
 val fd : _ t -> Fd.t
 
+module Cast : sig
+  val as_closable_generic : r -> Eio.Flow.Closable_sink.r
+  val as_generic : r -> Eio.Flow.Sink.r
+end

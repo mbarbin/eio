@@ -13,30 +13,30 @@ let resolve_program name =
     Some name
   ) else None
 
-let read_of_fd ~sw ~default ~to_close = function
+let read_of_fd (type a) ~sw ~default ~to_close = function
   | None -> default
-  | Some (Eio.Flow.Source.T (f, ops) as source) ->
+  | Some (((f, ops) : (a, _) Eio.Flow.Source.t) as source) ->
     match Eio.Resource_store.find ops#resource_store ~key:Fd.key.key with
     | Some fd -> fd f
     | None ->
-      let r, w = Private.pipe sw in
+      let (Source.T r), (Sink.T w) = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy source (Sink.Cast.as_generic w);
+          Eio.Flow.copy source w;
           Sink.close w
         );
       let r = Source.fd r in
       to_close := r :: !to_close;
       r
 
-let write_of_fd ~sw ~default ~to_close = function
+let write_of_fd (type a) ~sw ~default ~to_close = function
   | None -> default
-  | Some (Eio.Flow.Sink.T (f, ops) as sink) ->
+  | Some (((f, ops) : (a, _) Eio.Flow.Sink.t) as sink) ->
     match Eio.Resource_store.find ops#resource_store ~key:Fd.key.key with
     | Some fd -> fd f
     | None ->
-      let r, w = Private.pipe sw in
+      let (Source.T r, Sink.T w) = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy (Source.Cast.as_generic r) sink;
+          Eio.Flow.copy r sink;
           Source.close r
         );
       let w = Sink.fd w in
@@ -87,15 +87,15 @@ module type MGR_unix = sig
   val pipe :
     t ->
     sw:Switch.t ->
-    Source.t * Sink.t
+    Source.r * Sink.r
 
   val spawn :
     t ->
     sw:Switch.t ->
     ?cwd:Eio.Path.t ->
-    ?stdin:Eio.Flow.Source.t ->
-    ?stdout:Eio.Flow.Sink.t ->
-    ?stderr:Eio.Flow.Sink.t ->
+    ?stdin:_ Eio.Flow.Source.t ->
+    ?stdout:_ Eio.Flow.Sink.t ->
+    ?stderr:_ Eio.Flow.Sink.t ->
     ?env:string array ->
     ?executable:string ->
     string list ->
@@ -128,14 +128,14 @@ module Pi = struct
     Process (t, object method process = (module X : Eio.Process.PROCESS with type t = a) end)
 
   let mgr_unix (type a) (module X : MGR_unix with type t = a) (t : a) =
-    let module X_mgr = struct
+    let module X_mgr : Eio.Process.MGR with type t = a = struct
       type t = X.t
 
       let spawn = X.spawn
 
       let pipe t ~sw =
-        let (T r), (T w) = X.pipe t ~sw in
-        (Eio.Flow.Closable.Closable_source r, Eio.Flow.Closable.Closable_sink w)
+        let (r, w) = X.pipe t ~sw in
+        (Source.Cast.as_closable_generic r, Sink.Cast.as_closable_generic w)
     end in
     Mgr (t, object
            method mgr = (module X_mgr : Eio.Process.MGR with type t = a)

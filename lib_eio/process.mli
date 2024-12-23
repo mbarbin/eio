@@ -61,7 +61,7 @@ module type MGR = sig
   val pipe :
     t ->
     sw:Switch.t ->
-    _ Flow.closable_source * _ Flow.closable_sink
+    Flow.Closable_source.r * Flow.Closable_sink.r
 
   val spawn :
     t ->
@@ -177,7 +177,7 @@ val parse_out :
 val pipe
   : sw:Switch.t
     -> mgr
-    -> _ Flow.closable_source * _ Flow.closable_sink
+    -> Flow.Closable_source.r * Flow.Closable_sink.r
 (** [pipe ~sw mgr] creates a pipe backed by the OS.
 
     The flows can be used by {!spawn} without the need for extra fibers to copy the data.

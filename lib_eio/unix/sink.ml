@@ -15,7 +15,17 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a sink) t
 
-type r = T : 'a t' -> r
+type r = T : 'a t' -> r [@@unboxed]
 
 let close (type a) ((a, ops) : (a, _) t) = ops#close a
 let fd (type a) ((a, ops) : (a, _) t) = ops#fd a
+
+module Cast = struct
+  let as_closable_generic (T (a, ops)) =
+    Eio.Flow.Closable_sink.T
+      (a, (ops :> _ Eio.Flow.Closable_sink.closable_sink))
+
+  let as_generic (T (a, ops)) =
+    Eio.Flow.Sink.T
+      (a, (ops :> _ Eio.Flow.Sink.sink))
+end

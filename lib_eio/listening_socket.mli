@@ -21,7 +21,7 @@ end
 
 type 'a t' = ('a, 'a listening_socket) t
 
-type r = T : 'a t' -> r
+type r = T : 'a t' -> r [@@unboxed]
 
 val make : (module S with type t = 'a) -> 'a -> 'a t'
 

@@ -41,7 +41,7 @@ val run_in_systhread : ?label:string -> (unit -> 'a) -> 'a
 
     @param label The operation name to use in trace output. *)
 
-val pipe : Switch.t -> Source.t * Sink.t
+val pipe : Switch.t -> Source.r * Sink.r
 (** [pipe sw] returns a connected pair of flows [src] and [sink]. Data written to [sink]
     can be read from [src].
     Note that, like all FDs created by Eio, they are both marked as close-on-exec by default. *)

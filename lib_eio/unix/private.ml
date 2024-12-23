@@ -6,7 +6,7 @@ type _ Effect.t +=
   | Await_readable : Unix.file_descr -> unit Effect.t
   | Await_writable : Unix.file_descr -> unit Effect.t
   | Get_monotonic_clock : Eio.Time.Mono.ty r Effect.t
-  | Pipe : Switch.t -> (Source.t * Sink.t) Effect.t
+  | Pipe : Switch.t -> (Source.r * Sink.r) Effect.t
 
 let await_readable fd = Effect.perform (Await_readable fd)
 let await_writable fd = Effect.perform (Await_writable fd)

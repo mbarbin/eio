@@ -41,7 +41,7 @@ module Stream_socket = Stream_socket
 
 module Listening_socket = Listening_socket
 
-type 'a connection_handler = 'a Stream_socket.t' -> Sockaddr.stream -> unit
+type connection_handler = Stream_socket.r -> Sockaddr.stream -> unit
 (** A [_ connection_handler] handles incoming connections from a listening socket. *)
 
 module Datagram_socket = Datagram_socket
@@ -51,9 +51,9 @@ module type NETWORK = sig
 
   val listen :
     t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t ->
-    Sockaddr.stream -> _ Listening_socket.t
+    Sockaddr.stream -> Listening_socket.r
 
-  val connect : t -> sw:Switch.t -> Sockaddr.stream -> _ Stream_socket.t
+  val connect : t -> sw:Switch.t -> Sockaddr.stream -> Stream_socket.r
 
   val datagram_socket :
     t
@@ -61,7 +61,7 @@ module type NETWORK = sig
     -> reuse_port:bool
     -> sw:Switch.t
     -> [Sockaddr.datagram | `UdpV4 | `UdpV6]
-    -> _ Datagram_socket.t
+    -> Datagram_socket.r
 
   val getaddrinfo : t -> service:string -> string -> Sockaddr.t list
   val getnameinfo : t -> Sockaddr.t -> (string * string)
@@ -75,7 +75,7 @@ type ('a, 'r) t =
 
 (** {2 Out-bound Connections} *)
 
-val connect : sw:Switch.t -> _ t -> Sockaddr.stream -> _ Stream_socket.t
+val connect : sw:Switch.t -> _ t -> Sockaddr.stream -> Stream_socket.r
 (** [connect ~sw t addr] is a new socket connected to remote address [addr].
 
     The new socket will be closed when [sw] finishes, unless closed manually first. *)
@@ -85,7 +85,7 @@ val with_tcp_connect :
   host:string ->
   service:string ->
   _ t ->
-  (_ Stream_socket.t -> 'b) ->
+  (Stream_socket.r -> 'b) ->
   'b
 (** [with_tcp_connect ~host ~service t f] creates a tcp connection [conn] to [host] and [service] and executes 
     [f conn].
@@ -108,7 +108,7 @@ val with_tcp_connect :
 
 val listen :
   ?reuse_addr:bool -> ?reuse_port:bool -> backlog:int -> sw:Switch.t ->
-  _ t -> Sockaddr.stream -> _ Listening_socket.t
+  _ t -> Sockaddr.stream -> Listening_socket.r
 (** [listen ~sw ~backlog t addr] is a new listening socket bound to local address [addr].
 
     The new socket will be closed when [sw] finishes, unless closed manually first.
@@ -125,7 +125,7 @@ val listen :
 val accept :
   sw:Switch.t ->
   _ Listening_socket.t ->
-  _ Stream_socket.t * Sockaddr.stream
+  Stream_socket.r * Sockaddr.stream
 (** [accept ~sw socket] waits until a new connection is ready on [socket] and returns it.
 
     The new socket will be closed automatically when [sw] finishes, if not closed earlier.
@@ -135,7 +135,7 @@ val accept_fork :
   sw:Switch.t ->
   _ Listening_socket.t ->
   on_error:(exn -> unit) ->
-  _ Stream_socket.t connection_handler ->
+  connection_handler ->
   unit
 (** [accept_fork ~sw ~on_error socket fn] accepts a connection and handles it in a new fiber.
 
@@ -163,7 +163,7 @@ val run_server :
   ?stop:'a Promise.t ->
   on_error:(exn -> unit) ->
   _ Listening_socket.t ->
-  _ Stream_socket.t connection_handler ->
+  connection_handler ->
   'a
 (** [run_server ~on_error sock connection_handler] establishes a concurrent socket server [s].
 
@@ -195,7 +195,7 @@ val datagram_socket :
   -> sw:Switch.t
   -> _ t
   -> [< Sockaddr.datagram | `UdpV4 | `UdpV6]
-  -> _ Datagram_socket.t
+  -> Datagram_socket.r
   (** [datagram_socket ~sw t addr] creates a new datagram socket bound to [addr]. The new 
       socket will be closed when [sw] finishes. 
 

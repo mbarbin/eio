@@ -24,7 +24,7 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a file_ro) t
 
-type r = T : 'a t' -> r
+type r = T : 'a t' -> r [@@unboxed]
 
 val make : (module S with type t = 'a) -> 'a -> 'a t'
 

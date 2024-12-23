@@ -14,7 +14,7 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a closable) t
 
-type packed = T : 'a t' -> packed
+type r = T : 'a t' -> r [@@unboxed]
 
 let close (type a) ((t, ops) : (a, _) t) = ops#close t
 
