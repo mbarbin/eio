@@ -18,7 +18,7 @@ module Eio_main = struct
   let run fn =
     (* To avoid non-deterministic output, we run the examples a single domain. *)
     let fake_domain_mgr = Eio_mock.Domain_manager.create () in
-    Eio_main.run @@ fun (Env env) ->
+    Eio_main.run @@ fun env ->
     fn @@ object
       method net         = env#net
       method stdin       = env#stdin

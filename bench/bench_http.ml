@@ -59,7 +59,7 @@ let run_client ~n_requests id conn =
   done;
   !total
 
-let main net domain_mgr ~n_client_domains ~n_server_domains ~n_connections_per_domain ~n_requests_per_connection =
+let main (Eio_unix.Net.T net) domain_mgr ~n_client_domains ~n_server_domains ~n_connections_per_domain ~n_requests_per_connection =
   let total = Atomic.make 0 in
   let t0 = Unix.gettimeofday () in
   Switch.run ~name:"main" (fun sw ->

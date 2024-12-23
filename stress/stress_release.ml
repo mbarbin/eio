@@ -55,7 +55,7 @@ let main ~pool =
   done
 
 let () =
-  Eio_main.run @@ fun (Env env) ->
+  Eio_main.run @@ fun env ->
   let domain_mgr = Eio.Stdenv.domain_mgr env in
   Switch.run @@ fun sw ->
   let pool = Eio.Executor_pool.create ~sw ~domain_count:n_domains domain_mgr in

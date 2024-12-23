@@ -136,7 +136,7 @@ let test_no_sqe () =
   with Exit -> ()
 
 let test_read_exact () =
-  Eio_linux.run ~queue_depth:4 ~n_blocks:1 @@ fun (Env env) ->
+  Eio_linux.run ~queue_depth:4 ~n_blocks:1 @@ fun env ->
   let ( / ) = Eio.Path.( / ) in
   let path = env#cwd / "test.data" in
   let msg = "hello" in
@@ -161,7 +161,7 @@ let test_read_exact () =
     if got <> msg then Fmt.failwith "%S vs %S" got msg
 
 let test_expose_backend () =
-  Eio_linux.run @@ fun (Env env) ->
+  Eio_linux.run @@ fun env ->
   let backend = Eio.Stdenv.backend_id env in
   assert (backend = "linux")
 
@@ -169,7 +169,7 @@ let kind_t = Alcotest.of_pp Uring.Statx.pp_kind
 
 let test_statx () =
   let module X = Uring.Statx in
-  Eio_linux.run ~queue_depth:4 @@ fun (Env env) ->
+  Eio_linux.run ~queue_depth:4 @@ fun env ->
   let ( / ) = Eio.Path.( / ) in
   let path = env#cwd / "test2.data" in
   Eio.Path.with_open_out path ~create:(`Or_truncate 0o600) @@ fun (Eio.File.Rw.T file) ->

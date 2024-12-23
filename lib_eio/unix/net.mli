@@ -29,16 +29,20 @@ module type S = sig
   val getnameinfo : t -> Eio.Net.Sockaddr.t -> (string * string)
 end
 
-(* CR mbarbin: Remark about the scheme used: it should be possible to
-   remove the tuple from what's encapsulated by the ['r] variable
-   (only taking the object part). I suspect this may be simpler, but I
-   am not confident about, and not confident whether that'd work
-   either, this is just an idea atm. *)
+class type ['a] network = object
+  method network : (module Eio.Net.NETWORK with type t = 'a)
+  method network_unix : (module S with type t = 'a)
+end
+
 type ('a, 'r) t =
   ('a *
    (< network : (module Eio.Net.NETWORK with type t = 'a)
     ; network_unix : (module S with type t = 'a)
     ; .. > as 'r))
+
+type 'a t' = ('a, 'a network) t
+
+type r = T : 'a t' -> r [@@unboxed]
 
 val accept :
   sw:Switch.t ->

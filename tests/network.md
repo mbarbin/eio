@@ -9,7 +9,7 @@
 open Eio.Std
 
 let run (fn : net:Eio.Net.t -> Switch.t -> unit) =
-  Eio_main.run @@ fun (Env env) ->
+  Eio_main.run @@ fun env ->
   let net = Eio.Stdenv.net env |> Eio_unix.Net.to_generic in
   Switch.run (fn ~net)
 
@@ -353,7 +353,7 @@ Printing addresses with ports:
     let host = Eio_unix.Net.Ipaddr.of_unix (Unix.inet_addr_of_string host) in
     traceln "%a" Eio.Net.Sockaddr.pp (`Tcp (host, port))
   in
-  Eio_main.run @@ fun (Env env) ->
+  Eio_main.run @@ fun env ->
   show "127.0.0.1" 8080;
   show "::1" 8080;;
 +tcp:127.0.0.1:8080
@@ -564,7 +564,7 @@ EPIPE:
 Connection refused:
 
 ```ocaml
-# Eio_main.run @@ fun (Env env) ->
+# Eio_main.run @@ fun env ->
   Switch.run @@ fun sw ->
   Eio.Net.connect ~sw env#net (`Unix "idontexist.sock");;
 Exception: Eio.Io Fs Not_found _,
@@ -590,25 +590,25 @@ Exception: Eio.Io Fs Not_found _,
 ## Getaddrinfo
 
 ```ocaml
-# Eio_main.run @@ fun (Env env) ->
+# Eio_main.run @@ fun env ->
   Eio.Net.getaddrinfo_stream env#net "127.0.0.1";;
 - : Eio.Net.Sockaddr.stream list = [`Tcp ("\127\000\000\001", 0)]
 ```
 
 ```ocaml
-# Eio_main.run @@ fun (Env env) ->
+# Eio_main.run @@ fun env ->
   Eio.Net.getaddrinfo_stream env#net "127.0.0.1" ~service:"80";;
 - : Eio.Net.Sockaddr.stream list = [`Tcp ("\127\000\000\001", 80)]
 ```
 
 ```ocaml
-# Eio_main.run @@ fun (Env env) ->
+# Eio_main.run @@ fun env ->
   Eio.Net.getaddrinfo_datagram env#net "127.0.0.1";;
 - : Eio.Net.Sockaddr.datagram list = [`Udp ("\127\000\000\001", 0)]
 ```
 
 ```ocaml
-# Eio_main.run @@ fun (Env env) ->
+# Eio_main.run @@ fun env ->
   Eio.Net.getaddrinfo_datagram env#net "127.0.0.1" ~service:"80";;
 - : Eio.Net.Sockaddr.datagram list = [`Udp ("\127\000\000\001", 80)]
 ```
@@ -616,7 +616,7 @@ Exception: Eio.Io Fs Not_found _,
 <!-- $MDX file non-deterministic=output -->
 
 ```ocaml
-# Eio_main.run @@ fun (Env env) ->
+# Eio_main.run @@ fun env ->
   Eio_unix.Net.getaddrinfo ~service:"http" env#net "127.0.0.1";;
 - : Eio.Net.Sockaddr.t list =
 [`Tcp ("\127\000\000\001", 80); `Udp ("\127\000\000\001", 80)]
@@ -625,7 +625,7 @@ Exception: Eio.Io Fs Not_found _,
 <!-- $MDX file non-deterministic=output -->
 
 ```ocaml
-# Eio_main.run @@ fun (Env env) ->
+# Eio_main.run @@ fun env ->
   Eio_unix.Net.getaddrinfo ~service:"ftp" env#net "127.0.0.1";;
 - : Eio.Net.Sockaddr.t list =
 [`Tcp ("\127\000\000\001", 21); `Udp ("\127\000\000\001", 21)]
@@ -634,7 +634,7 @@ Exception: Eio.Io Fs Not_found _,
 <!-- $MDX file non-deterministic=output -->
 
 ```ocaml
-# Eio_main.run @@ fun (Env env) ->
+# Eio_main.run @@ fun env ->
   Eio.Net.getaddrinfo ~service:"https" env#net "google.com";;
 - : Eio.Net.Sockaddr.t list =
 [`Tcp ("�:��", 443); `Udp ("�:��", 443);
@@ -645,7 +645,7 @@ Exception: Eio.Io Fs Not_found _,
 ## getnameinfo
 
 ```ocaml
-# Eio_main.run @@ fun (Env env) ->
+# Eio_main.run @@ fun env ->
   let sockaddr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 80) in
   Eio.Net.getnameinfo env#net sockaddr;;
 - : string * string = ("localhost", "http")

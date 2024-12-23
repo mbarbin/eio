@@ -3,7 +3,7 @@ open Eio.Std
 let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 8080)
 
 (* Run a server and a test client, communicating using [net]. *)
-let main ~net =
+let main ~net:(Eio_unix.Net.T net) =
   Switch.run ~name:"main" @@ fun sw ->
   (* We create the listening socket first so that we can be sure it is ready
      as soon as the client wants to use it. *)
@@ -16,5 +16,5 @@ let main ~net =
   Client.run ~net ~addr
 
 let () =
-  Eio_main.run @@ fun (Env env) ->
+  Eio_main.run @@ fun env ->
   main ~net:env#net

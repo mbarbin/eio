@@ -26,7 +26,7 @@ let run main =
   let stdout = (Flow.of_fd Eio_unix.Fd.stdout |> Eio_unix.Flow.Cast.as_generic_sink) in
   let stderr = (Flow.of_fd Eio_unix.Fd.stderr |> Eio_unix.Flow.Cast.as_generic_sink) in
   let net = Net.v () in
-  Domain_mgr.run_event_loop main @@ (Eio_unix.Stdenv.Env (object
+  Domain_mgr.run_event_loop main @@ (object
     method stdin = stdin
     method stdout = stdout
     method stderr = stderr
@@ -40,4 +40,4 @@ let run main =
     method fs = (Eio.Path.Path (Fs.fs, "") :> Eio.Path.t)
     method secure_random = Flow.secure_random
     method backend_id = "posix"
-  end))
+  end)

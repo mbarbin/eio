@@ -34,5 +34,5 @@ let main ~domain_mgr =
   print_endline "OK"
 
 let () =
-  Eio_main.run @@ fun (Env env) ->
+  Eio_main.run @@ fun env ->
   main ~domain_mgr:(Eio.Stdenv.domain_mgr env)

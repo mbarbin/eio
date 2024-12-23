@@ -100,7 +100,7 @@ module Debug : sig
         }
 
         let () =
-          Eio_main.run @@ fun (Env env) ->
+          Eio_main.run @@ fun env ->
           let debug = Eio.Stdenv.debug env in
           Fiber.with_binding debug#traceln my_traceln @@ fun () ->
           traceln "Traced with custom function"
@@ -197,7 +197,7 @@ module Stdenv : sig
       Example:
       {[
         let () =
-          Eio_main.run @@ fun (Env env) ->
+          Eio_main.run @@ fun env ->
           Eio.Path.with_open_dir env#fs "/srv/www" @@ fun www ->
           serve_files www
             ~net:env#net

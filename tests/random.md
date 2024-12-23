@@ -11,7 +11,7 @@ open Eio.Std
 # Basic check for randomness
 
 ```ocaml
-# Eio_main.run @@ fun (Env env) ->
+# Eio_main.run @@ fun env ->
   let (Eio.Flow.Source.T src) = Eio.Stdenv.secure_random env in
   let b1 = Cstruct.create 8 in
   let b2 = Cstruct.create 8 in

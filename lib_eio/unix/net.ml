@@ -73,16 +73,21 @@ module type S = sig
   val getnameinfo : t -> Eio.Net.Sockaddr.t -> (string * string)
 end
 
+class type ['a] network = object
+  method network : (module Eio.Net.NETWORK with type t = 'a)
+  method network_unix : (module S with type t = 'a)
+end
+
 type ('a, 'r) t =
   ('a *
    (< network : (module Eio.Net.NETWORK with type t = 'a)
-   ; network_unix : (module S with type t = 'a)
-   ; ..> as 'r))
+    ; network_unix : (module S with type t = 'a)
+    ; .. > as 'r))
 
-(* CR mbarbin: This is temporary code that I use to be able to compile
-   some code that currently does not make use of [Eio_unix] specific
-   functionality. I would like to spend more time thinking about this
-   once I know more. *)
+type 'a t' = ('a, 'a network) t
+
+type r = T : 'a t' -> r [@@unboxed]
+
 module To_generic (X : S) : Eio.Net.NETWORK with type t = X.t = struct
   include X
 

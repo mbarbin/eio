@@ -172,7 +172,8 @@ module Impl = struct
   let getnameinfo () = Eio_unix.Net.getnameinfo
 end
 
-let net = Eio_unix.Net.Pi.make (module Impl) ()
+let net =
+  Eio_unix.Net.T (Eio_unix.Net.Pi.make (module Impl) ())
 
 type stdenv = Eio_unix.Stdenv.base
 
@@ -470,7 +471,7 @@ let stdenv ~run_event_loop =
   let stdin = Flow.stdin |> Eio_unix.Source.Cast.as_generic in
   let stdout = Flow.stdout |> Eio_unix.Sink.Cast.as_generic in
   let stderr = Flow.stderr |> Eio_unix.Sink.Cast.as_generic in
-  Eio_unix.Stdenv.Env (object
+  (object
     method stdin  = stdin
     method stdout = stdout
     method stderr = stderr

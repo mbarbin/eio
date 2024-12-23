@@ -54,12 +54,11 @@ module Cap = Cap
 
 (** The set of resources provided to a process on a Unix-compatible system. *)
 module Stdenv : sig
-  (* CR mbarbin: Replace the net part by [Net.r]? *)
-  type ('net, 'net_r) base_e = <
+  type base = <
     stdin  : Eio.Flow.Source.r;
     stdout : Eio.Flow.Sink.r;
     stderr : Eio.Flow.Sink.r;
-    net : ('net, 'net_r) Net.t;
+    net : Net.r;
     domain_mgr : Eio.Domain_manager.t;
     process_mgr : Process.mgr_r;
     clock : float Eio.Time.clock_ty r;
@@ -70,16 +69,9 @@ module Stdenv : sig
     debug : Eio.Debug.t;
     backend_id : string;
   >
-  constraint 'net_r =
-    ( < network : (module Eio.Net.NETWORK with type t = 'net)
-      ; network_unix : (module Net.S with type t = 'net)
-      ; .. > )
-
   (** The common set of features provided by all traditional operating systems (BSDs, Linux, Mac, Windows).
 
       You can use the functions in {!Eio.Stdenv} to access these fields if you prefer. *)
-
-  type base = Env : _ base_e -> base
 end
 
 (** API for Eio backends only. *)

@@ -28,5 +28,5 @@ let rec scan ((Eio.Path.Path t') as t) f =
   | _ -> ()
 
 let () =
-  Eio_main.run @@ fun (Env env) ->
+  Eio_main.run @@ fun env ->
   scan env#cwd Format.std_formatter

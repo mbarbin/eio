@@ -39,7 +39,7 @@ let trace ~finished (clock, delay) cursor =
   aux ()
 
 (* The program to be traced. *)
-let main net =
+let main (Eio_unix.Net.T net) =
   Switch.run ~name:"main" @@ fun sw ->
   let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 8123) in
   let (Eio.Net.Listening_socket.T s) = Eio.Net.listen ~sw ~backlog:1 ~reuse_addr:true net addr in
@@ -62,7 +62,7 @@ let main net =
 let () =
   Runtime_events.start ();
   let cursor = Runtime_events.create_cursor None in    (* Create a in-process cursor *)
-  Eio_main.run @@ fun (Env env) ->
+  Eio_main.run @@ fun env ->
   let finished = ref false in
   Fiber.both
     (fun () -> trace ~finished (env#mono_clock, 0.01) cursor)

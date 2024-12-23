@@ -19,7 +19,7 @@ let test_legacy () =
   traceln "Was able to read /etc/passwd:@.%s" (String.trim data)
 
 let () =
-  Eio_main.run @@ fun (Env env) ->
+  Eio_main.run @@ fun env ->
   (* Parse command-line arguments *)
   let path =
     match Sys.argv with

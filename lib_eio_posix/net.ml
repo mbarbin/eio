@@ -179,4 +179,5 @@ module Impl = struct
   let getnameinfo () = Eio_unix.Net.getnameinfo
 end
 
-let v () = Eio_unix.Net.Pi.make (module Impl) ()
+let v () =
+  Eio_unix.Net.T (Eio_unix.Net.Pi.make (module Impl) ())

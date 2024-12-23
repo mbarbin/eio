@@ -17,7 +17,7 @@ open Eio.Std
 let ( / ) = Path.( / )
 
 let run ?clear:(paths = []) fn =
-  Eio_main.run @@ fun (Env env) ->
+  Eio_main.run @@ fun env ->
   let cwd = Eio.Stdenv.cwd env in
   List.iter (fun p -> Eio.Path.rmtree ~missing_ok:true (cwd / p)) paths;
   fn env
