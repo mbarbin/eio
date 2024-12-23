@@ -208,9 +208,9 @@ module Stdenv : sig
 
       To use these, see {!Flow}. *)
 
-  val stdin  : <stdin  : _ Flow.source as 'a; ..> -> 'a
-  val stdout : <stdout : _ Flow.sink   as 'a; ..> -> 'a
-  val stderr : <stderr : _ Flow.sink   as 'a; ..> -> 'a
+  val stdin  : <stdin  : Flow.Source.r as 'a; ..> -> 'a
+  val stdout : <stdout : Flow.Sink.r   as 'a; ..> -> 'a
+  val stderr : <stderr : Flow.Sink.r   as 'a; ..> -> 'a
 
   (** {1 File-system access}
 
@@ -234,7 +234,7 @@ module Stdenv : sig
       To use this, see {!Net}.
   *)
 
-  val net : <net : _ Net.t as 'net; ..> -> 'net
+  val net : <net : Net.r as 'a; ..> -> 'a
   (** [net t] gives access to the process's network namespace. *)
 
   (** {1 Processes }
@@ -242,7 +242,7 @@ module Stdenv : sig
       To use this, see {!Process}.
   *)
 
-  val process_mgr : <process_mgr : 'process_mgr; ..> -> 'process_mgr
+  val process_mgr : <process_mgr : Process.mgr_r as 'a; ..> -> 'a
   (** [process_mgr t] allows you to manage child processes. *)
 
   (** {1 Domains (using multiple CPU cores)}
@@ -266,7 +266,7 @@ module Stdenv : sig
 
   (** {1 Randomness} *)
 
-  val secure_random : <secure_random : _ Flow.source as 'a; ..> -> 'a
+  val secure_random : <secure_random : Flow.Source.r as 'a; ..> -> 'a
   (** [secure_random t] is an infinite source of random bytes suitable for cryptographic purposes. *)
 
   (** {1 Debugging} *)

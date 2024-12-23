@@ -132,6 +132,10 @@ module Flow : sig
       a source during a copy operation. *)
 
   val close : _ t -> unit
+
+  module Cast : sig
+    val as_stream_socket : r -> Eio.Net.Stream_socket.r
+  end
 end
 
 (** Mock {!Eio.Net} networks and sockets. *)

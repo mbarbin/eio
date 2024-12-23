@@ -35,7 +35,8 @@ module Stream_socket = Stream_socket
 
 module Listening_socket = Listening_socket
 
-type connection_handler = Stream_socket.r -> Sockaddr.stream -> unit
+type connection_handler =
+  { connection_handler : 'a 'b. ('a, 'b) Stream_socket.t -> Sockaddr.stream -> unit }
 
 module Datagram_socket = Datagram_socket
 
@@ -79,13 +80,13 @@ let accept (type a) ~sw ((t, ops) : (a, _) Listening_socket.t) =
   let module X = (val ops#listening_socket) in
   X.accept t ~sw
 
-let accept_fork ~sw (t : _ Listening_socket.t) ~on_error handle =
+let accept_fork ~sw (t : _ Listening_socket.t) ~on_error { connection_handler } =
   let child_started = ref false in
-  let ((Stream_socket.T flow) as stream_socket), addr = accept ~sw t in
+  let (Stream_socket.T flow, addr) = accept ~sw t in
   Fun.protect ~finally:(fun () -> if !child_started = false then Stream_socket.close flow)
     (fun () ->
        Fiber.fork ~sw (fun () ->
-           match child_started := true; handle stream_socket addr with
+           match child_started := true; connection_handler flow addr with
            | x -> Stream_socket.close flow; x
            | exception (Cancel.Cancelled _ as ex) ->
              Stream_socket.close flow;
@@ -173,13 +174,13 @@ let with_tcp_connect ?(timeout=Time.Timeout.none) ~host ~service t f =
     Exn.reraise_with_context ex bt "connecting to %S:%s" host service
 
 (* Run a server loop in a single domain. *)
-let run_server_loop ~sw ~connections ~on_error ~stop listening_socket connection_handler =
+let run_server_loop ~sw ~connections ~on_error ~stop listening_socket { connection_handler } =
   let rec accept () =
     Semaphore.acquire connections;
-    accept_fork ~sw ~on_error listening_socket (fun conn addr ->
+    accept_fork ~sw ~on_error listening_socket { connection_handler = (fun conn addr ->
         Fun.protect (fun () -> connection_handler conn addr)
             ~finally:(fun () -> Semaphore.release connections)
-      );
+      )};
     accept ()
   in
   match stop with

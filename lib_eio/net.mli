@@ -41,7 +41,8 @@ module Stream_socket = Stream_socket
 
 module Listening_socket = Listening_socket
 
-type connection_handler = Stream_socket.r -> Sockaddr.stream -> unit
+type connection_handler =
+  { connection_handler : 'a 'b. ('a, 'b) Stream_socket.t -> Sockaddr.stream -> unit }
 (** A [_ connection_handler] handles incoming connections from a listening socket. *)
 
 module Datagram_socket = Datagram_socket

@@ -64,8 +64,7 @@ let test_copy () =
       Eio.Flow.copy from_pipe sink)
     (fun () ->
       for _ = 1 to 2 do
-        let (Eio.Flow.Source.T src) = Eio.Flow.string_source msg in
-        Eio.Flow.copy src to_pipe;
+        Eio.Flow.copy (Eio.Flow.string_source msg) to_pipe;
       done;
       Eio.Flow.close to_pipe
     );
@@ -89,8 +88,7 @@ let test_direct_copy () =
       Fiber.fork ~sw (fun () ->
         Trace.log "copy2";
         Eio.Flow.copy from_pipe2 to_output);
-      (match Eio.Flow.string_source msg with
-       | Eio.Flow.Source.T src -> Eio.Flow.copy src to_pipe1);
+      Eio.Flow.copy (Eio.Flow.string_source msg) to_pipe1;
       Eio_unix.Sink.close to_pipe1;
     );
   Alcotest.(check string) "Copy correct" msg (Buffer.contents buffer);

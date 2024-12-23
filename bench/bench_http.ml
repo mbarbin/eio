@@ -22,7 +22,7 @@ let parse_headers r =
   aux ();
   !len
 
-let handle_connection (Eio.Net.Stream_socket.T conn) _addr =
+let handle_connection conn _addr =
   Eio.Buf_write.with_sink conn @@ fun w ->
   let rec requests r =
     let _req = Eio.Buf_read.line r in
@@ -69,7 +69,7 @@ let main (Eio_unix.Net.T net) domain_mgr ~n_client_domains ~n_server_domains ~n_
         Eio.Net.listen ~reuse_addr:true ~backlog ~sw net addr
       in
       Fiber.fork_daemon ~sw (fun () ->
-          Eio.Net.run_server server_socket handle_connection
+          Eio.Net.run_server server_socket { connection_handler = handle_connection }
             ~additional_domains:(domain_mgr, n_server_domains - 1)
             ~on_error:raise
         );

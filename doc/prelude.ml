@@ -31,4 +31,4 @@ module Eio_main = struct
     end
 end
 
-let parse_config (flow : Eio.Flow.source) = ignore
+let parse_config (flow : Eio.File.Ro.r) = ignore

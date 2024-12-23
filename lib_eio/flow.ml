@@ -46,9 +46,11 @@ module Cstruct_source = struct
 
 end
 
+type cstruct_source = Cstruct_source.t
+
 let cstruct_source =
   let ops = Source.make (module Cstruct_source) in
-  fun data -> Source.T (ops (Cstruct_source.create data))
+  fun data -> ops (Cstruct_source.create data)
 
 module String_source = struct
   type t = {
@@ -68,9 +70,11 @@ module String_source = struct
   let create s = { s; offset = 0 }
 end
 
+type string_source = String_source.t
+
 let string_source =
   let ops = Source.make (module String_source) in
-  fun s -> Source.T (ops (String_source.create s))
+  fun s -> ops (String_source.create s)
 
 let single_read (type a) ((t, ops) : (a, _) Source.t) buf =
   let module X = (val ops#source) in
@@ -103,9 +107,7 @@ let copy_src (type a) src ((t, ops) : (a, _) Sink.t) =
   S.copy t ~src
 
 let copy src sink = copy_src src sink
-let copy_string s =
-  let Source.T src = string_source s in
-  copy_src src
+let copy_string s = copy_src (string_source s)
 
 module Buffer_sink = struct
   type t = Buffer.t

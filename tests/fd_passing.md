@@ -37,12 +37,11 @@ let test ~to_send r w =
 
 let with_tmp_file dir id fn =
   let path = (dir / (Printf.sprintf "tmp-%s.txt" id)) in
-  Eio.Path.with_open_out path ~create:(`Exclusive 0o600) @@ fun file ->
+  Eio.Path.with_open_out path ~create:(`Exclusive 0o600) @@ fun (Eio.File.Rw.T file) ->
   Fun.protect
     (fun () ->
-       let Eio.File.Rw (t, ops) = file in
        let fd = Eio.File.Rw.find_store file Eio_unix.Fd.key |> Option.get in
-       Eio.Flow.copy_string id (Eio.File.Rw.to_sink file);
+       Eio.Flow.copy_string id file;
        fn fd
     )
     ~finally:(fun () -> Eio.Path.unlink path)
@@ -57,7 +56,10 @@ Using a socket-pair:
   with_tmp_file env#cwd "foo" @@ fun fd1 ->
   with_tmp_file env#cwd "bar" @@ fun fd2 ->
   Switch.run @@ fun sw ->
-  let r, w = Eio_unix.Net.socketpair_stream ~sw ~domain:PF_UNIX ~protocol:0 () in
+  let (Eio_unix.Net.Stream_socket.T r,
+       Eio_unix.Net.Stream_socket.T w) =
+    Eio_unix.Net.socketpair_stream ~sw ~domain:PF_UNIX ~protocol:0 ()
+  in
   test ~to_send:[fd1; fd2] r w;;
 +Got: "x" plus 2 FDs
 +Read: "foo"

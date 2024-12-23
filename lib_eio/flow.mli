@@ -40,10 +40,14 @@ val read_exact : _ Source.t -> Cstruct.t -> unit
 (** [read_exact src dst] keeps reading into [dst] until it is full.
       @raise End_of_file if the buffer could not be filled. *)
 
-val string_source : string -> Source.r
+type string_source
+
+val string_source : string -> string_source Source.t'
 (** [string_source s] is a source that gives the bytes of [s]. *)
 
-val cstruct_source : Cstruct.t list -> Source.r
+type cstruct_source
+
+val cstruct_source : Cstruct.t list -> cstruct_source Source.t'
 (** [cstruct_source cs] is a source that gives the bytes of [cs]. *)
 
 (** {2 Writing} *)

@@ -8,8 +8,7 @@ open Eio.Std
 
 module Write = Eio.Buf_write
 
-let mock_flow = Eio_mock.Flow.make "flow"
-let flow = mock_flow |> Eio_mock.Flow.Cast.as_flow
+let flow = Eio_mock.Flow.make "flow"
 ```
 
 ## A simple run-through
@@ -191,7 +190,7 @@ With pausing
 ```ocaml
 let p1, r2 = Promise.create ();;
 
-Eio_mock.Flow.on_copy_bytes mock_flow [
+Eio_mock.Flow.on_copy_bytes flow [
   `Await p1;
 ]
 ```
@@ -223,7 +222,7 @@ Multiple flushes:
 
 ```ocaml
 # Eio_mock.Backend.run @@ fun () ->
-  Eio_mock.Flow.on_copy_bytes mock_flow [
+  Eio_mock.Flow.on_copy_bytes flow [
     `Yield_then (`Return 1);
     `Yield_then (`Return 2);
     `Yield_then (`Return 2);
@@ -264,7 +263,8 @@ module Slow_writer = struct
     with End_of_file -> ()
 
   let single_write t bufs =
-    copy t ~src:(Eio.Flow.cstruct_source bufs);
+    let (Eio.Flow.Source.T src) = Eio.Flow.cstruct_source bufs in
+    copy t ~src;
     Cstruct.lenv bufs
 end
 let slow_writer = Eio.Flow.Sink.make (module Slow_writer) ()
@@ -308,9 +308,8 @@ Cancelled while waiting for the underlying flow to perform the write:
 
 ```ocaml
 # Eio_mock.Backend.run @@ fun () ->
-  let mock_flow = Eio_mock.Flow.make "flow" in
-  let flow = Eio_mock.Flow.Cast.as_flow mock_flow in
-  Eio_mock.Flow.on_copy_bytes mock_flow [`Run Fiber.await_cancel];
+  let flow = Eio_mock.Flow.make "flow" in
+  Eio_mock.Flow.on_copy_bytes flow [`Run Fiber.await_cancel];
   Fiber.both
     (fun () ->
        Write.with_flow flow @@ fun t ->
@@ -395,7 +394,7 @@ We still flush the output on error:
 
 ```ocaml
 # Eio_mock.Backend.run @@ fun () ->
-  Eio_mock.Flow.on_copy_bytes mock_flow [`Return 1; `Yield_then (`Return 1)];
+  Eio_mock.Flow.on_copy_bytes flow [`Return 1; `Yield_then (`Return 1)];
   Write.with_flow flow @@ fun t ->
   Write.string t "foo";
   failwith "Simulated error";;
@@ -409,9 +408,8 @@ But we don't flush if cancelled:
 
 ```ocaml
 # Eio_mock.Backend.run @@ fun () ->
-  let mock_flow = Eio_mock.Flow.make "flow" in
-  let flow = Eio_mock.Flow.Cast.as_flow mock_flow in
-  Eio_mock.Flow.on_copy_bytes mock_flow [`Run Fiber.await_cancel];
+  let flow = Eio_mock.Flow.make "flow" in
+  Eio_mock.Flow.on_copy_bytes flow [`Run Fiber.await_cancel];
   Fiber.both
     (fun () ->
        Write.with_flow flow @@ fun t ->
@@ -451,9 +449,8 @@ And with `with_flow`:
 
 ```ocaml
 # Eio_mock.Backend.run @@ fun () ->
-  let mock_flow = Eio_mock.Flow.make "flow" in
-  let flow = Eio_mock.Flow.Cast.as_flow mock_flow in
-  Eio_mock.Flow.on_copy_bytes mock_flow [`Raise (Failure "Simulated IO error")];
+  let flow = Eio_mock.Flow.make "flow" in
+  Eio_mock.Flow.on_copy_bytes flow [`Raise (Failure "Simulated IO error")];
   Switch.run @@ fun sw ->
   Write.with_flow flow @@ fun t ->
   Fiber.fork ~sw (fun () ->
@@ -471,7 +468,7 @@ But the flush does succeed in the normal case:
 
 ```ocaml
 # Eio_mock.Backend.run @@ fun () ->
-  Eio_mock.Flow.on_copy_bytes mock_flow [`Yield_then (`Return 2); `Return 1];
+  Eio_mock.Flow.on_copy_bytes flow [`Yield_then (`Return 2); `Return 1];
   Switch.run @@ fun sw ->
   Write.with_flow flow @@ fun t ->
   Fiber.fork ~sw (fun () ->

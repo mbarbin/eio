@@ -141,7 +141,8 @@ We use [Eio_main.run][] to run the event loop and call `main` from there:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  main (Eio.Stdenv.stdout env);;
+  let (Eio.Flow.Sink.T stdout) = Eio.Stdenv.stdout env in
+  main stdout;;
 Hello, world!
 - : unit = ()
 ```
@@ -166,7 +167,8 @@ For example, instead of giving `main` the real standard output, we can have it w
 ```ocaml
 # Eio_main.run @@ fun _env ->
   let buffer = Buffer.create 20 in
-  main (Eio.Flow.buffer_sink buffer);
+  let (Eio.Flow.Sink.T sink) = (Eio.Flow.buffer_sink buffer) in
+  main sink;
   traceln "Main would print %S" (Buffer.contents buffer);;
 +Main would print "Hello, world!\n"
 - : unit = ()
@@ -180,7 +182,7 @@ The [Eio_mock][] library provides some convenient pre-built mocks:
 ```ocaml
 # #require "eio.mock";;
 # Eio_main.run @@ fun _env ->
-  main (Eio_mock.Flow.make "mock-stdout" |> Eio_mock.Flow.Cast.as_sink);;
+  main (Eio_mock.Flow.make "mock-stdout");;
 +mock-stdout: wrote "Hello, world!\n"
 - : unit = ()
 ```
@@ -365,15 +367,14 @@ Here is a server connection handler that handles an incoming connection by sendi
 ```ocaml
 let handle_client flow _addr =
   traceln "Server: got connection from client";
-  Eio.Flow.copy_string "Hello from server" (Eio.Net.Stream_socket.Cast.as_sink flow)
+  Eio.Flow.copy_string "Hello from server" flow
 ```
 
 We can test it using a mock flow:
 
 ```ocaml
 # Eio_mock.Backend.run @@ fun () ->
-  let mock_flow = Eio_mock.Flow.make "flow" in
-  let flow = Eio_mock.Flow.Cast.as_stream_socket mock_flow in
+  let flow = Eio_mock.Flow.make "flow" in
   let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 37568) in
   handle_client flow addr;;
 +Server: got connection from client
@@ -391,9 +392,9 @@ Here is a client that connects to address `addr` using network `net` and reads a
 let run_client ~net ~addr =
   Switch.run ~name:"client" @@ fun sw ->
   traceln "Client: connecting to server";
-  let flow = Eio.Net.connect ~sw net addr in
+  let (Eio.Net.Stream_socket.T flow) = Eio.Net.connect ~sw net addr in
   (* Read all data until end-of-stream (shutdown): *)
-  traceln "Client: received %S" (Eio.Flow.read_all (Eio.Net.Stream_socket.Cast.as_source flow))
+  traceln "Client: received %S" (Eio.Flow.read_all flow)
 ```
 
 Note: the `flow` is attached to `sw` and will be closed automatically when it finishes.
@@ -405,14 +406,14 @@ This can also be tested on its own using a mock network:
 # Eio_mock.Backend.run @@ fun () ->
   let net = Eio_mock.Net.make "mocknet" in
   let flow = Eio_mock.Flow.make "flow" in
-  Eio_mock.Net.on_connect net [`Return (Eio_mock.Flow.Cast.as_stream_socket flow)];
+  Eio_mock.Net.on_connect net [`Return (Eio_mock.Flow.Cast.as_stream_socket (T flow))];
   Eio_mock.Flow.on_read flow [
     `Return "(packet 1)";
     `Yield_then (`Return "(packet 2)");
     `Raise End_of_file;
   ];
   let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 8080) in
-  run_client ~net:(Eio_mock.Net.Cast.as_generic net) ~addr;;
+  run_client ~net ~addr;;
 +Client: connecting to server
 +mocknet: connect to tcp:127.0.0.1:8080
 +flow: read "(packet 1)"
