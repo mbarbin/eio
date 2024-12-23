@@ -62,8 +62,8 @@ let main net =
 let () =
   Runtime_events.start ();
   let cursor = Runtime_events.create_cursor None in    (* Create a in-process cursor *)
-  Eio_main.run @@ fun env ->
+  Eio_main.run @@ fun (Env env) ->
   let finished = ref false in
   Fiber.both
     (fun () -> trace ~finished (env#mono_clock, 0.01) cursor)
-    (fun () -> main (env#net |> Eio_unix.Net.to_generic); finished := true)
+    (fun () -> main (env#net |> Eio_unix.Net.Cast.as_generic); finished := true)

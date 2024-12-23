@@ -57,7 +57,7 @@ let test_denied base path =
 
 let () =
   try
-    Eio_posix.run @@ fun env ->
+    Eio_posix.run @@ fun (Env env) ->
     Eio.Path.(rmtree ~missing_ok:true (Eio.Stdenv.cwd env / "test_beneath"));
     Unix.mkdir "test_beneath" 0o700;
     Unix.mkdir "test_beneath/subdir" 0o700;

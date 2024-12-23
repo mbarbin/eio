@@ -31,5 +31,5 @@ let main ~dm mgr =
   traceln "Finished process stress test: ran %d processes in %.2fs (using %d domains)" n_procs (t1 -. t0) n_domains
 
 let () =
-  Eio_main.run @@ fun env ->
+  Eio_main.run @@ fun (Env env) ->
   main ~dm:env#domain_mgr (Eio_unix.Process.Mgr.as_generic env#process_mgr)

@@ -465,7 +465,7 @@ let stdenv ~run_event_loop =
   let stdin = Flow.stdin |> Eio_unix.Source.Cast.as_generic in
   let stdout = Flow.stdout |> Eio_unix.Sink.Cast.as_generic in
   let stderr = Flow.stderr |> Eio_unix.Sink.Cast.as_generic in
-  object (_ : stdenv)
+  Eio_unix.Stdenv.Env (object
     method stdin  = stdin
     method stdout = stdout
     method stderr = stderr
@@ -479,7 +479,7 @@ let stdenv ~run_event_loop =
     method secure_random = Flow.secure_random
     method debug = Eio.Private.Debug.v
     method backend_id = "linux"
-  end
+  end)
 
 let run_event_loop (type a) ?fallback config (main : _ -> a) arg : a =
   Sched.with_sched ?fallback config @@ fun st ->

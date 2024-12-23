@@ -19,13 +19,13 @@ let test_legacy () =
   traceln "Was able to read /etc/passwd:@.%s" (String.trim data)
 
 let () =
-  Eio_main.run @@ fun env ->
+  Eio_main.run @@ fun (Env env) ->
   (* Parse command-line arguments *)
   let path =
     match Sys.argv with
-    | [| _; dir |] -> Eio.Stdenv.fs env / dir
+    | [| _; dir |] -> env#fs / dir
     | _ -> failwith "Usage: main.exe DIR"
-  in 
+  in
   if not (Eio.Path.is_directory path) then Fmt.failwith "%a is not a directory" Eio.Path.pp path;
   (* Get access to resources before calling cap_enter: *)
   Eio.Path.with_open_dir path @@ fun dir ->

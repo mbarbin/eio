@@ -56,21 +56,22 @@ module Impl = struct
     Handler.run t.on_getnameinfo
 end
 
-type t =
+type 'r t =
   | Network :
       ('a *
        < network : (module Eio.Net.NETWORK with type t = 'a)
        ; raw : 'a -> Impl.t
-       ; ..>)
-      -> t [@@unboxed]
+       ; ..> as 'r)
+      -> 'r t
+[@@unboxed]
 
 module Cast = struct
   let as_generic (Network t) = Eio.Net.Network t
 end
 
-let raw (Network (t, ops)) = ops#raw t
+let raw (type a) (Network (t, ops) : a t) = ops#raw t
 
-let make : string -> t =
+let make : string -> _ t =
   let ops =
     object
       method network = (module Impl : Eio.Net.NETWORK with type t = Impl.t)
@@ -79,21 +80,21 @@ let make : string -> t =
   in
   fun label -> Network (Impl.make label, ops)
 
-let on_connect (t : t) actions =
+let on_connect (type a) (t : a t) (actions : Eio.Net.Stream_socket.t Handler.actions) =
   let t = raw t in
   Handler.seq t.on_connect (List.map (Action.map Fun.id) actions)
 
-let on_listen (t : t) actions =
+let on_listen (type a) (t : a t) actions =
   let t = raw t in
   Handler.seq t.on_listen (List.map (Action.map Fun.id) actions)
 
-let on_datagram_socket (t : t) actions =
+let on_datagram_socket (type a) (t : a t) actions =
   let t = raw t in
   Handler.seq t.on_datagram_socket (List.map (Action.map Fun.id) actions)
 
-let on_getaddrinfo (t:t) actions = Handler.seq (raw t).on_getaddrinfo actions
+let on_getaddrinfo (type a) (t : a t) actions = Handler.seq (raw t).on_getaddrinfo actions
 
-let on_getnameinfo (t:t) actions = Handler.seq (raw t).on_getnameinfo actions
+let on_getnameinfo (type a) (t : a t) actions = Handler.seq (raw t).on_getnameinfo actions
 
 module Listening_socket_impl = struct
   type t = {

@@ -31,11 +31,11 @@ module Net = Net
 module Cap = Cap
 
 module Stdenv = struct
-  type 'net base = <
+  type 'net base_e = <
     stdin  : Eio.Flow.source;
     stdout : Eio.Flow.sink;
     stderr : Eio.Flow.sink;
-    net : Net.packed;
+    net : 'net Net.t;
     domain_mgr : Eio.Domain_manager.t;
     process_mgr : Process.mgr;
     clock : float Eio.Time.clock_ty r;
@@ -46,4 +46,10 @@ module Stdenv = struct
     debug : Eio.Debug.t;
     backend_id: string;
   >
+  constraint 'net =
+  ('a *
+  < network : (module Eio.Net.NETWORK with type t = 'a);
+    network_unix : (module Net.S with type t = 'a); .. >)
+
+  type base = Env : 'net base_e -> base
 end

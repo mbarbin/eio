@@ -1,7 +1,6 @@
 (** Fallback Eio backend for POSIX systems. *)
 
-type stdenv = 'net Eio_unix.Stdenv.base
-  constraint 'net = int
+type stdenv = Eio_unix.Stdenv.base
 
 (** The type of the standard set of resources available on POSIX systems. *)
 

@@ -140,13 +140,13 @@ module Net : sig
     type t
   end
 
-  type t =
+  type 'r t =
     | Network :
         ('a *
          < network : (module Eio.Net.NETWORK with type t = 'a)
          ; raw : 'a -> Impl.t
-         ; ..>)
-        -> t [@@unboxed]
+         ; ..> as 'r)
+        -> 'r t [@@unboxed]
 
   module Listening_socket : sig
     type t =
@@ -164,21 +164,24 @@ module Net : sig
     end
   end
 
-  val make : string -> t
+  val make : string -> (Impl.t *
+  < network : (module Eio.Net.NETWORK with type t = Impl.t);
+    raw : Impl.t -> Impl.t >)
+ t
   (** [make label] is a new mock network. *)
 
-  val on_connect : t -> Eio.Net.Stream_socket.t Handler.actions -> unit
+  val on_connect : _ t -> Eio.Net.Stream_socket.t Handler.actions -> unit
   (** [on_connect t actions] configures what to do when a client tries to connect somewhere. *)
 
-  val on_listen : t -> Eio.Net.Listening_socket.t Handler.actions -> unit
+  val on_listen : _ t -> Eio.Net.Listening_socket.t Handler.actions -> unit
   (** [on_listen t actions] configures what to do when a server starts listening for incoming connections. *)
 
-  val on_datagram_socket : t -> Eio.Net.Datagram_socket.t Handler.actions -> unit
+  val on_datagram_socket : _ t -> Eio.Net.Datagram_socket.t Handler.actions -> unit
   (** [on_datagram_socket t actions] configures how to create datagram sockets. *)
 
-  val on_getaddrinfo : t -> Eio.Net.Sockaddr.t list Handler.actions -> unit
+  val on_getaddrinfo : _ t -> Eio.Net.Sockaddr.t list Handler.actions -> unit
 
-  val on_getnameinfo : t -> (string * string) Handler.actions -> unit
+  val on_getnameinfo : _ t -> (string * string) Handler.actions -> unit
 
   val listening_socket :
     ?listening_addr:Eio.Net.Sockaddr.stream -> string -> Listening_socket.t
@@ -193,7 +196,12 @@ module Net : sig
   (** [on_accept socket actions] configures how to respond when the server calls "accept". *)
 
   module Cast : sig
-    val as_generic : t -> Eio.Net.t
+    val as_generic :
+      ('a *
+       (< network : (module Eio.Net.NETWORK with type t = 'a)
+        ; raw : 'a -> Impl.t
+        ; .. > as 'b)) t
+      -> ('a * 'b) Eio.Net.t
   end
 end
 

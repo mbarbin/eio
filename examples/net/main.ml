@@ -16,5 +16,5 @@ let main ~net =
   Client.run ~net ~addr
 
 let () =
-  Eio_main.run @@ fun env ->
-  main ~net:(Eio.Stdenv.net env |> Eio_unix.Net.Cast.as_generic)
+  Eio_main.run @@ fun (Env env) ->
+  main ~net:(env#net |> Eio_unix.Net.Cast.as_generic)
