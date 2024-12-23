@@ -70,9 +70,9 @@ module Stdenv : sig
     backend_id : string;
   >
   constraint 'net_r =
-    ('net *
-    < network : (module Eio.Net.NETWORK with type t = 'net);
-      network_unix : (module Net.S with type t = 'net); .. >)
+    ( < network : (module Eio.Net.NETWORK with type t = 'net)
+      ; network_unix : (module Net.S with type t = 'net)
+      ; .. > )
 
   (** The common set of features provided by all traditional operating systems (BSDs, Linux, Mac, Windows).
 

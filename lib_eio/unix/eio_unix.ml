@@ -47,9 +47,9 @@ module Stdenv = struct
     backend_id: string;
   >
   constraint 'net_r =
-  ('net *
-  < network : (module Eio.Net.NETWORK with type t = 'net);
-    network_unix : (module Net.S with type t = 'net); .. >)
+  ( < network : (module Eio.Net.NETWORK with type t = 'net)
+    ; network_unix : (module Net.S with type t = 'net)
+    ; .. > )
 
   type base = Env : _ base_e -> base
 end

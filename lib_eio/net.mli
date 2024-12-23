@@ -228,9 +228,9 @@ end
 
 type ('a, 'r) t =
   ('a *
-   < network : (module NETWORK with type t = 'a)
+   (< network : (module NETWORK with type t = 'a)
    ; ..
-   > as 'r)
+   > as 'r))
 
 (** {2 Out-bound Connections} *)
 
@@ -409,5 +409,5 @@ module Pi : sig
   val network
     : (module NETWORK with type t = 'a)
     -> 'a
-    -> ('a, 'a * < network : (module NETWORK with type t = 'a) >) t
+    -> ('a, < network : (module NETWORK with type t = 'a) >) t
 end

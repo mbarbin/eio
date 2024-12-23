@@ -75,9 +75,9 @@ end
 
 type ('a, 'r) t =
   ('a *
-   < network : (module Eio.Net.NETWORK with type t = 'a)
+   (< network : (module Eio.Net.NETWORK with type t = 'a)
    ; network_unix : (module S with type t = 'a)
-   ; ..> as 'r)
+   ; ..> as 'r))
 
 (* CR mbarbin: This is temporary code that I use to be able to compile
    some code that currently does not make use of [Eio_unix] specific

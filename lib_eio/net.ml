@@ -303,9 +303,9 @@ end
 
 type ('a, 'r) t =
   ('a *
-   < network : (module NETWORK with type t = 'a)
+   (< network : (module NETWORK with type t = 'a)
    ; ..
-   > as 'r)
+   > as 'r))
 
 module Pi = struct
   let network (type t) (module X : NETWORK with type t = t) (t : t) =
