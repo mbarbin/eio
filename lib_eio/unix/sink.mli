@@ -1,16 +1,22 @@
-type t =
-    T :
-      ('a *
-       < close : 'a -> unit
-       ; fd : 'a -> Fd.t
-       ; sink : (module Eio.Flow.SINK with type t = 'a)
-       ; resource_store : 'a Eio.Resource_store.t
-       ; .. >) -> t [@@unboxed]
-
-module Cast : sig
-  val as_generic : t -> Eio.Flow.sink
+class type ['a] sink = object
+  method close : 'a -> unit
+  method fd : 'a -> Fd.t
+  method sink : (module Eio.Flow.SINK with type t = 'a)
+  method resource_store : 'a Eio.Resource_store.t
 end
 
-val close : t -> unit
-val fd : t -> Fd.t
+type ('a, 'r) t =
+  ('a *
+   (< close : 'a -> unit
+    ; fd : 'a -> Fd.t
+    ; sink : (module Eio.Flow.SINK with type t = 'a)
+    ; resource_store : 'a Eio.Resource_store.t
+    ; .. > as 'r))
+
+type 'a t' = ('a, 'a sink) t
+
+type r = T : 'a t' -> r
+
+val close : _ t -> unit
+val fd : _ t -> Fd.t
 

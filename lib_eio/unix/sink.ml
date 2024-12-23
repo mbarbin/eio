@@ -1,16 +1,21 @@
-type t =
-  | T :
-      ('a *
-       < sink : (module Eio.Flow.SINK with type t = 'a)
-       ; close : 'a -> unit
-       ; fd : 'a -> Fd.t
-       ; resource_store : 'a Eio.Resource_store.t
-       ; ..>)
-      -> t [@@unboxed]
-
-module Cast = struct
-  let as_generic (T a) = Eio.Flow.Sink.T a
+class type ['a] sink = object
+  method close : 'a -> unit
+  method fd : 'a -> Fd.t
+  method sink : (module Eio.Flow.SINK with type t = 'a)
+  method resource_store : 'a Eio.Resource_store.t
 end
 
-let close (T (a, ops)) = ops#close a
-let fd (T (a, ops)) = ops#fd a
+type ('a, 'r) t =
+  ('a *
+   (< close : 'a -> unit
+    ; fd : 'a -> Fd.t
+    ; sink : (module Eio.Flow.SINK with type t = 'a)
+    ; resource_store : 'a Eio.Resource_store.t
+    ; .. > as 'r))
+
+type 'a t' = ('a, 'a sink) t
+
+type r = T : 'a t' -> r
+
+let close (type a) ((a, ops) : (a, _) t) = ops#close a
+let fd (type a) ((a, ops) : (a, _) t) = ops#fd a

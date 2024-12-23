@@ -531,7 +531,7 @@ let with_sink ?(initial_size=0x1000) flow fn =
     flush t;
     raise ex
 
-let with_flow ?initial_size flow fn = with_sink ?initial_size (Flow.Cast.as_sink flow) fn
+let with_flow ?initial_size flow fn = with_sink ?initial_size flow fn
 
 let rec serialize t writev =
   match await_batch t with

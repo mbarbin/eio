@@ -149,7 +149,7 @@ module Flow : sig
 
   (** {2 Convenience wrappers} *)
 
-  val read_all : source -> string
+  val read_all : _ source -> string
   (** [read_all src] is a convenience wrapper to read an entire flow.
 
       It is the same as [Buf_read.(parse_exn take_all) src ~max_size:max_int] *)
@@ -208,9 +208,9 @@ module Stdenv : sig
 
       To use these, see {!Flow}. *)
 
-  val stdin  : <stdin  : Flow.source as 'a; ..> -> 'a
-  val stdout : <stdout : Flow.sink   as 'a; ..> -> 'a
-  val stderr : <stderr : Flow.sink   as 'a; ..> -> 'a
+  val stdin  : <stdin  : _ Flow.source as 'a; ..> -> 'a
+  val stdout : <stdout : _ Flow.sink   as 'a; ..> -> 'a
+  val stderr : <stderr : _ Flow.sink   as 'a; ..> -> 'a
 
   (** {1 File-system access}
 
@@ -266,7 +266,7 @@ module Stdenv : sig
 
   (** {1 Randomness} *)
 
-  val secure_random : <secure_random : Flow.source as 'a; ..> -> 'a
+  val secure_random : <secure_random : _ Flow.source as 'a; ..> -> 'a
   (** [secure_random t] is an infinite source of random bytes suitable for cryptographic purposes. *)
 
   (** {1 Debugging} *)

@@ -4,7 +4,7 @@ type t = {
   mutable buf : Cstruct.buffer;
   mutable pos : int;
   mutable len : int;
-  mutable flow : Flow.source option;    (* None if we've seen eof *)
+  mutable flow : Flow.Source.r option;    (* None if we've seen eof *)
   mutable consumed : int;               (* Total bytes consumed so far *)
   max_size : int;
 }
@@ -44,11 +44,11 @@ open Syntax
 
 let capacity t = Bigarray.Array1.dim t.buf
 
-let of_flow ?initial_size ~max_size flow =
+let of_flow (type a) ?initial_size ~max_size (flow : (a, _) Source.t) =
   if max_size <= 0 then Fmt.invalid_arg "Max size %d should be positive!" max_size;
   let initial_size = Option.value initial_size ~default:(min 4096 max_size) in
   let buf = Bigarray.(Array1.create char c_layout initial_size) in
-  { buf; pos = 0; len = 0; flow = Some flow; max_size; consumed = 0 }
+  { buf; pos = 0; len = 0; flow = Some (Source.T (flow :> _ Source.t')); max_size; consumed = 0 }
 
 let of_buffer buf =
   let len = Bigarray.Array1.dim buf in
@@ -88,7 +88,7 @@ let ensure_slow_path t n =
   (* We don't have enough data yet, so we'll need to do a read. *)
   match t.flow with
   | None -> raise End_of_file
-  | Some flow ->
+  | Some (Source.T flow) ->
     (* If the buffer is empty, we might as well use all of it: *)
     if t.len = 0 then t.pos <- 0;
     let () =
@@ -147,7 +147,7 @@ module F = struct
 end
 
 let as_flow t =
-  Flow.Source.make (module F) t
+  Flow.Source.T (Flow.Source.make (module F) t)
 
 let get t i =
   Bigarray.Array1.get t.buf (t.pos + i)

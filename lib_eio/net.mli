@@ -30,147 +30,28 @@ val err : error -> exn
 (** [err e] is [Eio.Exn.create (Net e)] *)
 
 (** IP addresses. *)
-module Ipaddr : sig
-  type 'a t = private string
-  (** The raw bytes of the IP address.
-      It is either 4 bytes long (for an IPv4 address) or
-      16 bytes long (for IPv6). *)
-
-  (** IPv4 addresses. *)
-  module V4 : sig
-    val any : [> `V4] t
-    (** A special IPv4 address, for use only with [listen], representing
-        all the Internet addresses that the host machine possesses. *)
-
-    val loopback : [> `V4] t
-    (** A special IPv4 address representing the host machine ([127.0.0.1]). *)
-  end
-
-  (** IPv6 addresses. *)
-  module V6 : sig
-    val any : [> `V6] t
-    (** A special IPv6 address, for use only with [listen], representing
-        all the Internet addresses that the host machine possesses. *)
-
-    val loopback : [> `V6] t
-    (** A special IPv6 address representing the host machine ([::1]). *)
-  end
-
-  val pp : [< `V4 | `V6] t Fmt.t
-  (** [pp] formats IP addresses.
-      For IPv6 addresses, it follows {{:http://tools.ietf.org/html/rfc5952}}. *)
-
-  type v4v6 = [`V4 | `V6] t
-
-  val fold :
-    v4:([> `V4] t -> 'a) -> 
-    v6:([> `V6] t -> 'a) ->
-    [< `V4 | `V6] t ->
-    'a
-  (** [fold ~v4 ~v6 t] is [v4 t] if [t] is an IPv4 address, or [v6 t] if it's an IPv6 address. *)
-
-  (** {2 Interoperability}
-
-  To convert to or from OCaml Unix addresses, use {!Eio_unix.Ipaddr}.
-
-  To interoperate with the {{:https://opam.ocaml.org/packages/ipaddr/} ipaddr} library:
-  - [Ipaddr.to_octets ipaddr_ip |> Eio.Net.Ipaddr.of_raw]
-  - [Ipaddr.of_octets_exn (eio_ip :> string)] *)
-
-  val of_raw : string -> v4v6
-  (** [of_raw addr] casts [addr] to an IP address.
-      @raise Invalid_argument if it is not 4 or 16 bytes long. *)
-end
+module Ipaddr = Ipaddr
 
 (** Network addresses. *)
-module Sockaddr : sig
-  type stream = [
-    | `Unix of string
-    | `Tcp of Ipaddr.v4v6 * int
-  ]
-  (** Socket addresses that we can build a {! Flow.two_way} for i.e. stream-oriented
-      protocols. *)
-
-  type datagram = [
-    | `Udp of Ipaddr.v4v6 * int
-    | `Unix of string
-  ]
-  (** Socket addresses that are message-oriented. *)
-
-  type t = [ stream | datagram ]
-
-  val pp : Format.formatter -> [< t] -> unit
-end
+module Sockaddr = Sockaddr
 
 (** {2 Types} *)
 
 module Stream_socket = Stream_socket
 
-module Listening_socket : sig
-
-  module type S = sig
-    type t
-
-    val accept : t -> sw:Switch.t -> _ Stream_socket.t * Sockaddr.stream
-    val close : t -> unit
-    val listening_addr : t -> Sockaddr.stream
-  end
-
-  type t =
-    | T :
-        ('a *
-         < listening_socket : (module S with type t = 'a)
-         ; close : 'a -> unit
-         ; resource_store : 'a Resource_store.t
-         ; ..>)
-        -> t [@@unboxed]
-
-  val find_store : t -> 'b Resource_store.accessor -> 'b option
-
-  val close : t -> unit
-
-  module Pi : sig
-    val make : (module S with type t = 'a) -> 'a -> t
-  end
-end
+module Listening_socket = Listening_socket
 
 type 'a connection_handler = 'a Stream_socket.t' -> Sockaddr.stream -> unit
 (** A [_ connection_handler] handles incoming connections from a listening socket. *)
 
-module Datagram_socket : sig
-
-  module type S = sig
-    include Flow.SHUTDOWN
-    val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
-    val recv : t -> Cstruct.t -> Sockaddr.datagram * int
-    val close : t -> unit
-  end
-
-  type t =
-    | T :
-        ('a *
-         < shutdown : (module Flow.SHUTDOWN with type t = 'a)
-         ; datagram_socket : (module S with type t = 'a)
-         ; close : 'a -> unit
-         ; resource_store : 'a Resource_store.t
-         ; .. >)
-        -> t [@@unboxed]
-
-  val find_store : t -> 'b Resource_store.accessor -> 'b option
-
-  val close : t -> unit
-
-  module Pi : sig
-    val make : (module S with type t = 'a) -> 'a -> t
-  end
-end
+module Datagram_socket = Datagram_socket
 
 module type NETWORK = sig
   type t
 
   val listen :
     t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t ->
-    Sockaddr.stream -> Listening_socket.t
+    Sockaddr.stream -> _ Listening_socket.t
 
   val connect : t -> sw:Switch.t -> Sockaddr.stream -> _ Stream_socket.t
 
@@ -180,7 +61,7 @@ module type NETWORK = sig
     -> reuse_port:bool
     -> sw:Switch.t
     -> [Sockaddr.datagram | `UdpV4 | `UdpV6]
-    -> Datagram_socket.t
+    -> _ Datagram_socket.t
 
   val getaddrinfo : t -> service:string -> string -> Sockaddr.t list
   val getnameinfo : t -> Sockaddr.t -> (string * string)
@@ -227,7 +108,7 @@ val with_tcp_connect :
 
 val listen :
   ?reuse_addr:bool -> ?reuse_port:bool -> backlog:int -> sw:Switch.t ->
-  _ t -> Sockaddr.stream -> Listening_socket.t
+  _ t -> Sockaddr.stream -> _ Listening_socket.t
 (** [listen ~sw ~backlog t addr] is a new listening socket bound to local address [addr].
 
     The new socket will be closed when [sw] finishes, unless closed manually first.
@@ -243,7 +124,7 @@ val listen :
 
 val accept :
   sw:Switch.t ->
-  Listening_socket.t ->
+  _ Listening_socket.t ->
   _ Stream_socket.t * Sockaddr.stream
 (** [accept ~sw socket] waits until a new connection is ready on [socket] and returns it.
 
@@ -252,7 +133,7 @@ val accept :
 
 val accept_fork :
   sw:Switch.t ->
-  Listening_socket.t ->
+  _ Listening_socket.t ->
   on_error:(exn -> unit) ->
   _ Stream_socket.t connection_handler ->
   unit
@@ -272,7 +153,7 @@ val accept_fork :
                     [on_error] is not called for {!Cancel.Cancelled} exceptions,
                     which do not need to be reported. *)
 
-val listening_addr : Listening_socket.t -> Sockaddr.stream
+val listening_addr : _ Listening_socket.t -> Sockaddr.stream
 
 (** {2 Running Servers} *)
 
@@ -281,7 +162,7 @@ val run_server :
   ?additional_domains:(Domain_manager.t * int) ->
   ?stop:'a Promise.t ->
   on_error:(exn -> unit) ->
-  Listening_socket.t ->
+  _ Listening_socket.t ->
   _ Stream_socket.t connection_handler ->
   'a
 (** [run_server ~on_error sock connection_handler] establishes a concurrent socket server [s].
@@ -314,7 +195,7 @@ val datagram_socket :
   -> sw:Switch.t
   -> _ t
   -> [< Sockaddr.datagram | `UdpV4 | `UdpV6]
-  -> Datagram_socket.t
+  -> _ Datagram_socket.t
   (** [datagram_socket ~sw t addr] creates a new datagram socket bound to [addr]. The new 
       socket will be closed when [sw] finishes. 
 
@@ -326,12 +207,12 @@ val datagram_socket :
       @param reuse_addr Set the {!Unix.SO_REUSEADDR} socket option.
       @param reuse_port Set the {!Unix.SO_REUSEPORT} socket option. *)
 
-val send : Datagram_socket.t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
+val send : _ Datagram_socket.t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
 (** [send sock buf] sends the data in [buf] using the the datagram socket [sock].
 
     @param dst If [sock] isn't connected, this provides the destination. *)
 
-val recv : Datagram_socket.t -> Cstruct.t -> Sockaddr.datagram * int
+val recv : _ Datagram_socket.t -> Cstruct.t -> Sockaddr.datagram * int
 (** [recv sock buf] receives data from the socket [sock] putting it in [buf]. The number of bytes received is 
     returned along with the sender address and port. If the [buf] is too small then excess bytes may be discarded
     depending on the type of the socket the message is received from. *)

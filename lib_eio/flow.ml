@@ -120,7 +120,7 @@ end
 
 let buffer_sink =
   let ops = Sink.make (module Buffer_sink) in
-  fun b -> ops b
+  fun b -> Sink.T (ops b)
 
 module Source = Source
 

@@ -61,15 +61,15 @@ module type MGR = sig
   val pipe :
     t ->
     sw:Switch.t ->
-    Flow.Closable.closable_source * Flow.Closable.closable_sink
+    _ Flow.closable_source * _ Flow.closable_sink
 
   val spawn :
     t ->
     sw:Switch.t ->
     ?cwd:Path.t ->
-    ?stdin:Flow.source ->
-    ?stdout:Flow.sink ->
-    ?stderr:Flow.sink ->
+    ?stdin:_ Flow.source ->
+    ?stdout:_ Flow.sink ->
+    ?stderr:_ Flow.sink ->
     ?env:string array ->
     ?executable:string ->
     string list ->
@@ -110,9 +110,9 @@ val spawn :
   sw:Switch.t ->
   mgr ->
   ?cwd:Path.t ->
-  ?stdin:Flow.source ->
-  ?stdout:Flow.sink ->
-  ?stderr:Flow.sink ->
+  ?stdin:_ Flow.source ->
+  ?stdout:_ Flow.sink ->
+  ?stderr:_ Flow.sink ->
   ?env:string array ->
   ?executable:string ->
   string list -> t
@@ -136,9 +136,9 @@ val spawn :
 val run :
   mgr ->
   ?cwd:Path.t ->
-  ?stdin:Flow.source ->
-  ?stdout:Flow.sink ->
-  ?stderr:Flow.sink ->
+  ?stdin:_ Flow.source ->
+  ?stdout:_ Flow.sink ->
+  ?stderr:_ Flow.sink ->
   ?is_success:(int -> bool) ->
   ?env:string array ->
   ?executable:string ->
@@ -155,8 +155,8 @@ val parse_out :
   mgr ->
   'a Buf_read.parser ->
   ?cwd:Path.t ->
-  ?stdin:Flow.source ->
-  ?stderr:Flow.sink ->
+  ?stdin:_ Flow.source ->
+  ?stderr:_ Flow.sink ->
   ?is_success:(int -> bool) ->
   ?env:string array ->
   ?executable:string ->
@@ -177,7 +177,7 @@ val parse_out :
 val pipe
   : sw:Switch.t
     -> mgr
-    -> Flow.Closable.closable_source * Flow.Closable.closable_sink
+    -> _ Flow.closable_source * _ Flow.closable_sink
 (** [pipe ~sw mgr] creates a pipe backed by the OS.
 
     The flows can be used by {!spawn} without the need for extra fibers to copy the data.

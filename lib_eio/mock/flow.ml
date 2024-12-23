@@ -82,11 +82,11 @@ module Mock_flow = struct
     traceln "%s: read @[<v>%a@]" t.label t.pp data;
     len
 
-  let copy t ~src =
+  let copy (type a) t ~src =
     match t.copy_method with
     | `Read_into -> copy_via_buffer t src
     | `Read_source_buffer ->
-      let (Eio.Flow.Source.T (src, ops)) = src in
+      let ((src, ops) : (a, _) Eio.Flow.Source.t) = src in
       let module Src = (val ops#source) in
       let try_rsb = function
         | Eio.Flow.Read_source_buffer rsb -> copy_rsb t (rsb src); true
@@ -119,23 +119,32 @@ module Mock_flow = struct
     }
 end
 
-type t =
-  | T :
-      ('a *
-       < raw : 'a -> Mock_flow.t
-       ; shutdown : (module Eio.Flow.SHUTDOWN with type t = 'a)
-       ; source : (module Eio.Flow.SOURCE with type t = 'a)
-       ; sink : (module Eio.Flow.SINK with type t = 'a)
-       ; close : 'a -> unit
-       ; resource_store : 'a Eio.Resource_store.t
-       ; ..>)
-      -> t [@@unboxed]
+class type ['a] flow = object
+  method raw : 'a -> Mock_flow.t
+  method shutdown : (module Eio.Flow.SHUTDOWN with type t = 'a)
+  method source : (module Eio.Flow.SOURCE with type t = 'a)
+  method sink : (module Eio.Flow.SINK with type t = 'a)
+  method close : 'a -> unit
+  method resource_store : 'a Eio.Resource_store.t
+end
 
-let raw (T (t, ops)) = ops#raw t
+type ('a, 'r) t =
+  ('a *
+   (< raw : 'a -> Mock_flow.t
+    ; shutdown : (module Eio.Flow.SHUTDOWN with type t = 'a)
+    ; source : (module Eio.Flow.SOURCE with type t = 'a)
+    ; sink : (module Eio.Flow.SINK with type t = 'a)
+    ; close : 'a -> unit
+    ; resource_store : 'a Eio.Resource_store.t
+    ; ..> as 'r))
 
-let close (T (t, ops)) = ops#close t
+type 'a t' = ('a, 'a flow) t
 
-let as_stream_socket (T d) = Eio.Net.Stream_socket.T d
+type r = T : 'a t' -> r
+
+let raw (type a) ((t, ops) : (a, _) t) = ops#raw t
+
+let close (type a) ((t, ops) : (a, _) t) = ops#close t
 
 let attach_to_switch t sw =
   let t = raw t in
@@ -146,22 +155,14 @@ let on_read t = Handler.seq (raw t).on_read
 let on_copy_bytes t = Handler.seq (raw t).on_copy_bytes
 let set_copy_method t v = (raw t).copy_method <- v
 
-let make ?pp label : t =
+let make ?pp label : _ t' =
   let t = Mock_flow.make ?pp label in
   let resource_store = Eio.Resource_store.create () in
-  T
-    (t, object
-       method raw = Fun.id
-       method close = Mock_flow.close
-       method shutdown = (module Mock_flow : Eio.Flow.SHUTDOWN with type t = Mock_flow.t)
-       method source = (module Mock_flow : Eio.Flow.SOURCE with type t = Mock_flow.t)
-       method sink = (module Mock_flow : Eio.Flow.SINK with type t = Mock_flow.t)
-       method resource_store = resource_store
-     end)
-
-module Cast = struct
-  let as_source (T t) = Eio.Flow.Source.T t
-  let as_sink (T t) = Eio.Flow.Sink.T t
-  let as_flow (T t) = Eio.Flow.T t
-  let as_stream_socket (T t) = Eio.Net.Stream_socket.T t
-end
+  (t, object
+     method raw = Fun.id
+     method close = Mock_flow.close
+     method shutdown = (module Mock_flow : Eio.Flow.SHUTDOWN with type t = Mock_flow.t)
+     method source = (module Mock_flow : Eio.Flow.SOURCE with type t = Mock_flow.t)
+     method sink = (module Mock_flow : Eio.Flow.SINK with type t = Mock_flow.t)
+     method resource_store = resource_store
+   end)

@@ -92,12 +92,12 @@ val load : t -> string
 
     This is a convenience wrapper around {!with_open_in}. *)
 
-val open_in : sw:Switch.t -> t -> File.ro
+val open_in : sw:Switch.t -> t -> _ File.ro
 (** [open_in ~sw t] opens [t] for reading.
 
     Note: files are always opened in binary mode. *)
 
-val with_open_in : t -> (File.ro -> 'a) -> 'a
+val with_open_in : t -> (_ File.ro -> 'a) -> 'a
 (** [with_open_in] is like [open_in], but calls [fn flow] with the new flow and closes
     it automatically when [fn] returns (if it hasn't already been closed by then). *)
 
@@ -117,7 +117,7 @@ val open_out :
   sw:Switch.t ->
   ?append:bool ->
   create:create ->
-  t -> File.rw
+  t -> _ File.rw
 (** [open_out ~sw t] opens [t] for reading and writing.
 
     Note: files are always opened in binary mode.
@@ -127,7 +127,7 @@ val open_out :
 val with_open_out :
   ?append:bool ->
   create:create ->
-  t -> (File.rw -> 'a) -> 'a
+  t -> (_ File.rw -> 'a) -> 'a
 (** [with_open_out] is like [open_out], but calls [fn flow] with the new flow and closes
     it automatically when [fn] returns (if it hasn't already been closed by then). *)
 

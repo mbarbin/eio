@@ -27,218 +27,17 @@ let () =
       | _ -> false
     )
 
-module Ipaddr = struct
-  type 'a t = string   (* = [Unix.inet_addr], but avoid a Unix dependency here *)
+module Ipaddr = Ipaddr
 
-  module V4 = struct
-    let any      = "\000\000\000\000"
-    let loopback = "\127\000\000\001"
-
-    let pp f t =
-      Fmt.pf f "%d.%d.%d.%d"
-        (Char.code t.[0])
-        (Char.code t.[1])
-        (Char.code t.[2])
-        (Char.code t.[3])
-  end
-
-  module V6 = struct
-    let any      = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-    let loopback = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\001"
-
-    let to_int16 t =
-      let get i = Char.code (t.[i]) in
-      let pair i = (get i lsl 8) lor (get (i + 1)) in
-      List.init 8 (fun i -> pair (i * 2))
-
-    (* [calc_elide elide zeros acc parts] finds the best place for the "::"
-       when printing an IPv6 address.
-       Returns [None, rev t] if there are no pairs of zeros, or
-       [Some (-n), rev t'] where [n] is the length of the longest run of zeros
-       and [t'] is [t] with all runs of zeroes replaced with [-len_run]. *)
-    let calc_elide t =
-      (* [elide] is the negative of the length of the best previous run of zeros seen.
-         [zeros] is the current run.
-         [acc] is the values seen so far, with runs of zeros replaced by a
-         negative value giving the length of the run. *)
-      let rec loop elide zeros acc = function
-      | 0 :: xs -> loop elide (zeros - 1) acc xs
-      | n :: xs when zeros = 0 -> loop elide 0 (n :: acc) xs
-      | n :: xs -> loop (min elide zeros) 0 (n :: zeros :: acc) xs
-      | [] ->
-        let elide = min elide zeros in
-        let parts = if zeros = 0 then acc else zeros :: acc in
-        ((if elide < -1 then Some elide else None), List.rev parts)
-          
-      in
-      loop 0 0 [] t
-
-    let rec cons_zeros l x =
-      if x >= 0 then l else cons_zeros (Some 0 :: l) (x + 1)
-
-    let elide l =
-      let rec aux ~elide = function
-        | [] -> []
-        | x :: xs when x >= 0 ->
-          Some x :: aux ~elide xs
-        | x :: xs when Some x = elide ->
-          None :: aux ~elide:None xs
-        | z :: xs ->
-          cons_zeros (aux ~elide xs) z
-      in
-      let elide, l = calc_elide l in
-      assert (match elide with Some x when x < -8 -> false | _ -> true);
-      aux ~elide l
-
-    (* Based on https://github.com/mirage/ocaml-ipaddr/
-       See http://tools.ietf.org/html/rfc5952 *)
-    let pp f t =
-      let comp = to_int16 t in
-      let v4 = match comp with [0; 0; 0; 0; 0; 0xffff; _; _] -> true | _ -> false in
-      let l = elide comp in
-      let rec fill = function
-        | [ Some hi; Some lo ] when v4 ->
-          Fmt.pf f "%d.%d.%d.%d"
-            (hi lsr 8) (hi land 0xff)
-            (lo lsr 8) (lo land 0xff)
-        | None :: xs ->
-          Fmt.string f "::";
-          fill xs
-        | [ Some n ] -> Fmt.pf f "%x" n
-        | Some n :: None :: xs ->
-          Fmt.pf f "%x::" n;
-          fill xs
-        | Some n :: xs ->
-          Fmt.pf f "%x:" n;
-          fill xs
-        | [] -> ()
-      in
-      fill l
-  end
-
-  type v4v6 = [`V4 | `V6] t
-
-  let fold ~v4 ~v6 t =
-    match String.length t with
-    | 4 -> v4 t
-    | 16 -> v6 t
-    | _ -> assert false
-
-  let of_raw t =
-    match String.length t with
-    | 4 | 16 -> t
-    | x -> Fmt.invalid_arg "An IP address must be either 4 or 16 bytes long (%S is %d bytes)" t x
-
-  let pp f = fold ~v4:(V4.pp f) ~v6:(V6.pp f)
-
-  let pp_for_uri f =
-    fold
-      ~v4:(V4.pp f)
-      ~v6:(Fmt.pf f "[%a]" V6.pp)
-end
-
-module Sockaddr = struct
-  type stream = [
-    | `Unix of string
-    | `Tcp of Ipaddr.v4v6 * int
-  ]
-
-  type datagram = [
-    | `Udp of Ipaddr.v4v6 * int
-    | `Unix of string
-  ]
-
-  type t = [ stream | datagram ]
-
-  let pp f = function
-    | `Unix path ->
-      Format.fprintf f "unix:%s" path
-    | `Tcp (addr, port) ->
-      Format.fprintf f "tcp:%a:%d" Ipaddr.pp_for_uri addr port
-    | `Udp (addr, port) ->
-      Format.fprintf f "udp:%a:%d" Ipaddr.pp_for_uri addr port
-end
+module Sockaddr = Sockaddr
 
 module Stream_socket = Stream_socket
 
-module Listening_socket = struct
-
-  module type S = sig
-    type t
-
-    val accept : t -> sw:Switch.t -> _ Stream_socket.t * Sockaddr.stream
-    val close : t -> unit
-    val listening_addr : t -> Sockaddr.stream
-  end
-
-  type t =
-  | T :
-      ('a *
-       < listening_socket : (module S with type t = 'a)
-       ; close : 'a -> unit
-       ; resource_store : 'a Resource_store.t
-       ; ..>)
-      -> t [@@unboxed]
-
-  let find_store (T (t, ops)) { Resource_store. key } =
-    Resource_store.find ops#resource_store ~key
-    |> Option.map (fun f -> f t)
-
-  (* CR mbarbin: Could be using [S.close] instead and simplify [t]. *)
-  let close (T (t, ops)) = ops#close t
-
-  module Pi = struct
-    let make (type t) (module X : S with type t = t) (t : t) =
-      let resource_store = Resource_store.create () in
-      T
-        (t, object
-           method close = X.close
-           method listening_socket = (module X : S with type t = t)
-           method resource_store = resource_store
-         end)
-  end
-end
+module Listening_socket = Listening_socket
 
 type 'a connection_handler = 'a Stream_socket.t' -> Sockaddr.stream -> unit
 
-module Datagram_socket = struct
-
-  module type S = sig
-    include Flow.SHUTDOWN
-    val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
-    val recv : t -> Cstruct.t -> Sockaddr.datagram * int
-    val close : t -> unit
-  end
-
-  type t =
-    | T :
-        ('a *
-         < shutdown : (module Flow.SHUTDOWN with type t = 'a)
-         ; datagram_socket : (module S with type t = 'a)
-         ; close : 'a -> unit
-         ; resource_store : 'a Resource_store.t
-         ; .. >)
-        -> t [@@unboxed]
-
-  let find_store (T (t, ops)) { Resource_store. key } =
-    Resource_store.find ops#resource_store ~key
-    |> Option.map (fun f -> f t)
-
-  (* CR mbarbin: Could be using [S.close] instead and simplify [t]. *)
-  let close (T (t, ops)) = ops#close t
-
-  module Pi = struct
-    let make (type t) (module X : S with type t = t) (t : t) =
-      let resource_store = Resource_store.create () in
-      T
-        (t, object
-           method shutdown = (module X : Flow.SHUTDOWN with type t = t)
-           method datagram_socket = (module X : S with type t = t)
-           method close = X.close
-           method resource_store = resource_store
-         end)
-  end
-end
+module Datagram_socket = Datagram_socket
 
 module type NETWORK = sig
   type t
@@ -251,7 +50,7 @@ module type NETWORK = sig
     -> reuse_port:bool
     -> sw:Switch.t
     -> [Sockaddr.datagram | `UdpV4 | `UdpV6]
-    -> Datagram_socket.t
+    -> _ Datagram_socket.t
 
   val getaddrinfo : t -> service:string -> string -> Sockaddr.t list
   val getnameinfo : t -> Sockaddr.t -> (string * string)
@@ -270,13 +69,13 @@ module Pi = struct
     end)
 end
 
-let accept ~sw (Listening_socket.T (t, ops)) =
+let accept (type a) ~sw ((t, ops) : (a, _) Listening_socket.t) =
   let module X = (val ops#listening_socket) in
   X.accept t ~sw
 
-let accept_fork ~sw (t : Listening_socket.t) ~on_error handle =
+let accept_fork ~sw (t : _ Listening_socket.t) ~on_error handle =
   let child_started = ref false in
-  let flow, addr = accept ~sw t in
+  let (Stream_socket.T flow), addr = accept ~sw t in
   Fun.protect ~finally:(fun () -> if !child_started = false then Stream_socket.close flow)
     (fun () ->
        Fiber.fork ~sw (fun () ->

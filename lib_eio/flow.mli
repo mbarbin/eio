@@ -80,7 +80,7 @@ val copy : _ Source.t -> _ Sink.t -> unit
 val copy_string : string -> _ Sink.t -> unit
 (** [copy_string s = copy (string_source s)] *)
 
-val buffer_sink : Buffer.t -> _ Sink.t'
+val buffer_sink : Buffer.t -> Sink.r
 (** [buffer_sink b] is a sink that adds anything sent to it to [b].
 
     To collect data as a cstruct, use {!Buf_read} instead. *)

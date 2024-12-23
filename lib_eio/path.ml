@@ -147,7 +147,7 @@ let with_open_dir path fn =
 
 let with_lines path fn =
   with_open_in path @@ fun flow ->
-  let buf = Buf_read.of_flow (File.Ro.to_source flow) ~max_size:max_int in
+  let buf = Buf_read.of_flow flow ~max_size:max_int in
   fn (Buf_read.lines buf)
 
 let load (Path (t, path)) =
@@ -158,7 +158,7 @@ let load (Path (t, path)) =
       raise @@ Fs.err File_too_large;
     let buf = Cstruct.create (Optint.Int63.to_int size) in
     let rec loop buf got =
-      match Flow.single_read (File.Ro.to_source flow) buf with
+      match Flow.single_read flow buf with
       | n -> loop (Cstruct.shift buf n) (n + got)
       | exception End_of_file -> got
     in
@@ -170,7 +170,7 @@ let load (Path (t, path)) =
 
 let save ?append ~create path data =
   with_open_out ?append ~create path @@ fun flow ->
-  Flow.copy_string data (File.Rw.to_sink flow)
+  Flow.copy_string data flow
 
 let unlink t =
   let (Path (Resource.T (dir, ops), path)) = t in

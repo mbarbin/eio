@@ -54,15 +54,15 @@ module type MGR = sig
   val pipe :
     t ->
     sw:Switch.t ->
-    Flow.Closable.closable_source * Flow.Closable.closable_sink
+    _ Flow.closable_source * _ Flow.closable_sink
 
   val spawn :
     t ->
     sw:Switch.t ->
     ?cwd:Path.t ->
-    ?stdin:Flow.source ->
-    ?stdout:Flow.sink ->
-    ?stderr:Flow.sink ->
+    ?stdin:_ Flow.source ->
+    ?stdout:_ Flow.sink ->
+    ?stderr:_ Flow.sink ->
     ?env:string array ->
     ?executable:string ->
     string list ->
@@ -128,9 +128,9 @@ let spawn ~sw (t : mgr) ?cwd ?stdin ?stdout ?stderr ?env ?executable args : t =
     ?cwd:(cwd :> Path.t option)
     ?env
     ?executable args
-    ?stdin:(stdin :> Flow.source option)
-    ?stdout:(stdout :> Flow.sink option)
-    ?stderr:(stderr :> Flow.sink option)
+    ?stdin
+    ?stdout
+    ?stderr
 
 let run t ?cwd ?stdin ?stdout ?stderr ?(is_success = Int.equal 0) ?env ?executable args =
   Switch.run ~name:"Process.run" @@ fun sw ->
@@ -149,9 +149,9 @@ let parse_out (t : mgr) parse ?cwd ?stdin ?stderr ?is_success ?env ?executable a
   Switch.run ~name:"Process.parse_out" @@ fun sw ->
   let r, w = pipe t ~sw in
   try
-    let child = spawn ~sw t ?cwd ?stdin ~stdout:(Flow.Closable.sink w) ?stderr ?env ?executable args in
+    let child = spawn ~sw t ?cwd ?stdin ~stdout:w ?stderr ?env ?executable args in
     Flow.close_sink w;
-    let output = Buf_read.parse_exn parse (Flow.Closable.source r) ~max_size:max_int in
+    let output = Buf_read.parse_exn parse r ~max_size:max_int in
     Flow.close_source r;
     await_exn ?is_success child;
     output

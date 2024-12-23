@@ -37,8 +37,8 @@ end
 type ('a, 'r) t =
   ('a *
    (< network : (module Eio.Net.NETWORK with type t = 'a)
-   ; network_unix : (module S with type t = 'a)
-   ; .. > as 'r))
+    ; network_unix : (module S with type t = 'a)
+    ; .. > as 'r))
 
 val accept :
   sw:Switch.t ->
