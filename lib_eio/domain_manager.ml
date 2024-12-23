@@ -6,12 +6,16 @@ module type MGR = sig
   val run_raw : t -> (unit -> 'a) -> 'a
 end
 
-type ('a, 'b) mgr = < mgr : (module MGR with type t = 'a); .. > as 'b
-type t = Domain_mgr : ('a * ('a, _) mgr) -> t [@@unboxed]
+type t =
+  | Domain_mgr :
+      ('a *
+       < mgr : (module MGR with type t = 'a)
+       ; .. >)
+      -> t [@@unboxed]
 
 module Pi = struct
-  let mgr (type t) (module X : MGR with type t = t) : (t, _) mgr =
-    object method mgr = (module X : MGR with type t = t) end
+  let make (type a) (module X : MGR with type t = a) (t : a) =
+    Domain_mgr (t, object method mgr = (module X : MGR with type t = a) end)
 end
 
 let run_raw (Domain_mgr (t, ops)) fn =

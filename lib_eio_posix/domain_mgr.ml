@@ -122,6 +122,4 @@ module Impl = struct
     unwrap_backtrace (Domain.join (Option.get !domain))
 end
 
-let v =
-  let handler = Eio.Domain_manager.Pi.mgr (module Impl) in
-  Eio.Domain_manager.Domain_mgr ((), handler)
+let v = Eio.Domain_manager.Pi.make (module Impl) ()

@@ -10,8 +10,12 @@ module type MGR = sig
   val run_raw : t -> (unit -> 'a) -> 'a
 end
 
-type ('a, 'b) mgr = < mgr : (module MGR with type t = 'a); .. > as 'b
-type t = Domain_mgr : ('a * ('a, _) mgr) -> t [@@unboxed]
+type t =
+  | Domain_mgr :
+      ('a *
+       < mgr : (module MGR with type t = 'a)
+       ; .. >)
+      -> t [@@unboxed]
 
 val run : t -> (unit -> 'a) -> 'a
 (** [run t f] runs [f ()] in a newly-created domain and returns the result.
@@ -30,5 +34,5 @@ val run_raw : t -> (unit -> 'a) -> 'a
 (** {2 Provider Interface} *)
 
 module Pi : sig
-  val mgr : (module MGR with type t = 'a) -> < mgr : (module MGR with type t = 'a) >
+  val make : (module MGR with type t = 'a) -> 'a -> t
 end
