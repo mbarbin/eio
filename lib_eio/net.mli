@@ -104,54 +104,14 @@ end
 
 (** {2 Types} *)
 
-(* CR mbarbin: We could go and rename this Strean_socket.[S], have the
-   constructor named [T], etc. Do a pass to make this more consistent
-   through the refactored parts. *)
-
-module Stream_socket : sig
-
-  module type S = sig
-    include Flow.SHUTDOWN
-    include Flow.SOURCE with type t := t
-    include Flow.SINK with type t := t
-    val close : t -> unit
-  end
-
-  type t =
-    | T :
-        ('a *
-         < shutdown : (module Flow.SHUTDOWN with type t = 'a)
-         ; source : (module Flow.SOURCE with type t = 'a)
-         ; sink : (module Flow.SINK with type t = 'a)
-         ; close : 'a -> unit
-         ; resource_store : 'a Resource_store.t
-         ; .. >)
-        -> t [@@unboxed]
-
-  module Cast : sig
-    val as_source : t -> Flow.source
-    val as_sink : t -> Flow.sink
-    val as_flow : t -> Flow.t
-  end
-
-  val find_store : t -> 'b Resource_store.accessor -> 'b option
-
-  (* CR mbarbin: when the dust settles on the refactoring, define common
-     interfaces, such as this close there, that would be defined somewhere so we
-     can simply include them with type t. *)
-  val close : t -> unit
-
-  module Pi : sig
-    val make : (module S with type t = 'a) -> 'a -> t
-  end
-end
+module Stream_socket = Stream_socket
 
 module Listening_socket : sig
 
   module type S = sig
     type t
 
-    val accept : t -> sw:Switch.t -> Stream_socket.t * Sockaddr.stream
+    val accept : t -> sw:Switch.t -> _ Stream_socket.t * Sockaddr.stream
     val close : t -> unit
     val listening_addr : t -> Sockaddr.stream
   end
@@ -174,7 +134,7 @@ module Listening_socket : sig
   end
 end
 
-type 'a connection_handler = Stream_socket.t -> Sockaddr.stream -> unit
+type 'a connection_handler = 'a Stream_socket.t' -> Sockaddr.stream -> unit
 (** A [_ connection_handler] handles incoming connections from a listening socket. *)
 
 module Datagram_socket : sig
@@ -212,7 +172,7 @@ module type NETWORK = sig
     t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t ->
     Sockaddr.stream -> Listening_socket.t
 
-  val connect : t -> sw:Switch.t -> Sockaddr.stream -> Stream_socket.t
+  val connect : t -> sw:Switch.t -> Sockaddr.stream -> _ Stream_socket.t
 
   val datagram_socket :
     t
@@ -234,7 +194,7 @@ type ('a, 'r) t =
 
 (** {2 Out-bound Connections} *)
 
-val connect : sw:Switch.t -> _ t -> Sockaddr.stream -> Stream_socket.t
+val connect : sw:Switch.t -> _ t -> Sockaddr.stream -> _ Stream_socket.t
 (** [connect ~sw t addr] is a new socket connected to remote address [addr].
 
     The new socket will be closed when [sw] finishes, unless closed manually first. *)
@@ -244,7 +204,7 @@ val with_tcp_connect :
   host:string ->
   service:string ->
   _ t ->
-  (Stream_socket.t -> 'b) ->
+  (_ Stream_socket.t -> 'b) ->
   'b
 (** [with_tcp_connect ~host ~service t f] creates a tcp connection [conn] to [host] and [service] and executes 
     [f conn].
@@ -284,7 +244,7 @@ val listen :
 val accept :
   sw:Switch.t ->
   Listening_socket.t ->
-  Stream_socket.t * Sockaddr.stream
+  _ Stream_socket.t * Sockaddr.stream
 (** [accept ~sw socket] waits until a new connection is ready on [socket] and returns it.
 
     The new socket will be closed automatically when [sw] finishes, if not closed earlier.
@@ -294,7 +254,7 @@ val accept_fork :
   sw:Switch.t ->
   Listening_socket.t ->
   on_error:(exn -> unit) ->
-  Stream_socket.t connection_handler ->
+  _ Stream_socket.t connection_handler ->
   unit
 (** [accept_fork ~sw ~on_error socket fn] accepts a connection and handles it in a new fiber.
 
@@ -322,7 +282,7 @@ val run_server :
   ?stop:'a Promise.t ->
   on_error:(exn -> unit) ->
   Listening_socket.t ->
-  Stream_socket.t connection_handler ->
+  _ Stream_socket.t connection_handler ->
   'a
 (** [run_server ~on_error sock connection_handler] establishes a concurrent socket server [s].
 

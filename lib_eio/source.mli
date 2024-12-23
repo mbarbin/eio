@@ -13,8 +13,12 @@ end
 
 type ('a, 'r) t =
   ('a *
-   < source : (module S with type t = 'a)
-   ; resource_store : 'a Resource_store.t
-   ; ..> as 'r)
+   (< source : (module S with type t = 'a)
+    ; resource_store : 'a Resource_store.t
+    ; ..> as 'r))
 
-val make : (module S with type t = 'a) -> 'a -> ('a, 'a * 'a source) t
+type 'a t' = ('a, 'a source) t
+
+type r = T : 'a t' -> r
+
+val make : (module S with type t = 'a) -> 'a -> 'a t'

@@ -159,58 +159,14 @@ module Sockaddr = struct
       Format.fprintf f "udp:%a:%d" Ipaddr.pp_for_uri addr port
 end
 
-module Stream_socket = struct
-
-  module type S = sig
-    include Flow.SHUTDOWN
-    include Flow.SOURCE with type t := t
-    include Flow.SINK with type t := t
-    val close : t -> unit
-  end
-
-  type t =
-    | T :
-        ('a *
-         < shutdown : (module Flow.SHUTDOWN with type t = 'a)
-         ; source : (module Flow.SOURCE with type t = 'a)
-         ; sink : (module Flow.SINK with type t = 'a)
-         ; close : 'a -> unit
-         ; resource_store : 'a Resource_store.t
-         ; .. >)
-        -> t [@@unboxed]
-
-  module Cast = struct
-    let as_source (T t) = Flow.Source.T t
-    let as_sink (T t) = Flow.Sink.T t
-    let as_flow (T t) = Flow.T t
-  end
-
-  let find_store (T (t, ops)) { Resource_store. key } =
-    Resource_store.find ops#resource_store ~key
-    |> Option.map (fun f -> f t)
-
-  let close (T (t, ops)) = ops#close t
-
-  module Pi = struct
-    let make (type t) (module X : S with type t = t) (t : t) =
-      let resource_store = Resource_store.create () in
-      T
-        (t, object
-           method close = X.close
-           method shutdown = (module X : Flow.SHUTDOWN with type t = t)
-           method source = (module X : Flow.SOURCE with type t = t)
-           method sink = (module X : Flow.SINK with type t = t)
-           method resource_store = resource_store
-         end)
-  end
-end
+module Stream_socket = Stream_socket
 
 module Listening_socket = struct
 
   module type S = sig
     type t
 
-    val accept : t -> sw:Switch.t -> Stream_socket.t * Sockaddr.stream
+    val accept : t -> sw:Switch.t -> _ Stream_socket.t * Sockaddr.stream
     val close : t -> unit
     val listening_addr : t -> Sockaddr.stream
   end
@@ -243,7 +199,7 @@ module Listening_socket = struct
   end
 end
 
-type 'a connection_handler = Stream_socket.t -> Sockaddr.stream -> unit
+type 'a connection_handler = 'a Stream_socket.t' -> Sockaddr.stream -> unit
 
 module Datagram_socket = struct
 
@@ -288,7 +244,7 @@ module type NETWORK = sig
   type t
 
   val listen : t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t -> Sockaddr.stream -> Listening_socket.t
-  val connect : t -> sw:Switch.t -> Sockaddr.stream -> Stream_socket.t
+  val connect : t -> sw:Switch.t -> Sockaddr.stream -> _ Stream_socket.t
   val datagram_socket :
     t
     -> reuse_addr:bool

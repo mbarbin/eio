@@ -40,14 +40,20 @@ val read_exact : _ Source.t -> Cstruct.t -> unit
 (** [read_exact src dst] keeps reading into [dst] until it is full.
       @raise End_of_file if the buffer could not be filled. *)
 
+(* CR mbarbin: Possibly it is better to return a Source.packed for
+   these constructors. *)
 module String_source : sig
   type t
 end
 
-val string_source : string -> (String_source.t, String_source.t * String_source.t Source.source) Source.t
+val string_source : string -> String_source.t Source.t'
 (** [string_source s] is a source that gives the bytes of [s]. *)
 
-val cstruct_source : Cstruct.t list -> _ Source.t
+module Cstruct_source : sig
+  type t
+end
+
+val cstruct_source : Cstruct.t list -> Cstruct_source.t Source.t'
 (** [cstruct_source cs] is a source that gives the bytes of [cs]. *)
 
 (** {2 Writing} *)
@@ -74,7 +80,7 @@ val copy : _ Source.t -> _ Sink.t -> unit
 val copy_string : string -> _ Sink.t -> unit
 (** [copy_string s = copy (string_source s)] *)
 
-val buffer_sink : Buffer.t -> _ Sink.t
+val buffer_sink : Buffer.t -> _ Sink.t'
 (** [buffer_sink b] is a sink that adds anything sent to it to [b].
 
     To collect data as a cstruct, use {!Buf_read} instead. *)
