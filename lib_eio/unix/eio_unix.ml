@@ -32,9 +32,9 @@ module Cap = Cap
 
 module Stdenv = struct
   type ('net, 'net_r) base_e = <
-    stdin  : Eio.Flow.source;
-    stdout : Eio.Flow.sink;
-    stderr : Eio.Flow.sink;
+    stdin  : Eio.Flow.Source.r;
+    stdout : Eio.Flow.Sink.r;
+    stderr : Eio.Flow.Sink.r;
     net : ('net, 'net_r) Net.t;
     domain_mgr : Eio.Domain_manager.t;
     process_mgr : Process.mgr;
@@ -42,7 +42,7 @@ module Stdenv = struct
     mono_clock : Eio.Time.Mono.ty r;
     fs : Eio.Path.t;
     cwd : Eio.Path.t;
-    secure_random : Eio.Flow.source;
+    secure_random : Eio.Flow.Source.r;
     debug : Eio.Debug.t;
     backend_id: string;
   >

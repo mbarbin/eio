@@ -43,7 +43,9 @@ module Listening_socket = struct
 end
 
 let listening_socket ~hook fd =
-  Eio_unix.Net.Listening_socket.Pi.make (module Listening_socket) (Listening_socket.make ~hook fd)
+  Eio_unix.Net.Listening_socket.T
+    (Eio_unix.Net.Listening_socket.make
+      (module Listening_socket) (Listening_socket.make ~hook fd))
 
 module Datagram_socket = struct
   type t = Eio_unix.Fd.t
@@ -73,7 +75,8 @@ module Datagram_socket = struct
 end
 
 let datagram_socket fd =
-  Eio_unix.Net.Datagram_socket.Pi.make (module Datagram_socket) fd
+  Eio_unix.Net.Datagram_socket.T
+    (Eio_unix.Net.Datagram_socket.make (module Datagram_socket) fd)
 
 (* https://www.iana.org/assignments/protocol-numbers/protocol-numbers.xhtml *)
 let getaddrinfo ~service node =

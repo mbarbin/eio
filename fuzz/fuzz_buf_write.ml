@@ -32,7 +32,7 @@ let op =
 let random ops close =
   Eio_mock.Backend.run @@ fun _ ->
   let b = Buffer.create 100 in
-  let flow = Eio.Flow.buffer_sink b in
+  let (Eio.Flow.Sink.T flow) = Eio.Flow.buffer_sink b in
   let expected = ref [] in
   W.with_sink flow ~initial_size (fun t ->
       let perform (Op (s, write)) =

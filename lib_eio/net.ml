@@ -56,18 +56,24 @@ module type NETWORK = sig
   val getnameinfo : t -> Sockaddr.t -> (string * string)
 end
 
+class type ['a] network = object
+  method network : (module NETWORK with type t = 'a)
+end
+
 type ('a, 'r) t =
   ('a *
    (< network : (module NETWORK with type t = 'a)
-   ; ..
-   > as 'r))
+    ; ..
+    > as 'r))
 
-module Pi = struct
-  let network (type t) (module X : NETWORK with type t = t) (t : t) =
-    (t, object
-      method network = (module X : NETWORK with type t = t)
-    end)
-end
+type 'a t' = ('a, 'a network) t
+
+type r = T : 'a t' -> r [@@unboxed]
+
+let make (type t) (module X : NETWORK with type t = t) (t : t) =
+  (t, object
+     method network = (module X : NETWORK with type t = t)
+   end)
 
 let accept (type a) ~sw ((t, ops) : (a, _) Listening_socket.t) =
   let module X = (val ops#listening_socket) in
@@ -140,7 +146,7 @@ let getnameinfo (type a) ((t, ops) : (a, _) t) sockaddr =
   let module X = (val ops#network) in
   X.getnameinfo t sockaddr
 
-let close = Resource.close
+let close = Closable.close
 
 let with_tcp_connect ?(timeout=Time.Timeout.none) ~host ~service t f =
   Switch.run ~name:"with_tcp_connect" @@ fun sw ->

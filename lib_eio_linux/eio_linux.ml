@@ -62,7 +62,9 @@ module Datagram_socket = struct
     | `All -> Unix.SHUTDOWN_ALL
 end
 
-let datagram_socket fd = Eio_unix.Net.Datagram_socket.Pi.make (module Datagram_socket) fd
+let datagram_socket fd =
+  Eio_unix.Net.Datagram_socket.T
+    (Eio_unix.Net.Datagram_socket.make (module Datagram_socket) fd)
 
 module Listening_socket = struct
   type t = Fd.t
@@ -86,7 +88,9 @@ module Listening_socket = struct
       (fun fd -> Eio_unix.Net.sockaddr_of_unix_stream (Unix.getsockname fd))
 end
 
-let listening_socket fd = Eio_unix.Net.Listening_socket.Pi.make (module Listening_socket) fd
+let listening_socket fd =
+  Eio_unix.Net.Listening_socket.T
+    (Eio_unix.Net.Listening_socket.make (module Listening_socket) fd)
 
 let socket_domain_of = function
   | `Unix _ -> Unix.PF_UNIX

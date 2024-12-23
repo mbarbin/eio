@@ -11,6 +11,8 @@ module Unix_perm = Stat.Unix_perm
 (** Portable file stats. *)
 module Stat = Stat
 
+(* CR mbarbin: Decide whether to keep or not the aliases. *)
+
 type ('a, 'r) ro = ('a, 'r) File_ro.t
 (** A file opened for reading. *)
 
@@ -68,5 +70,5 @@ val truncate : _ rw -> Optint.Int63.t -> unit
 
 (** {2 Provider Interface} *)
 
-module File_ro = File_ro
-module File_rw = File_rw
+module Ro = File_ro
+module Rw = File_rw

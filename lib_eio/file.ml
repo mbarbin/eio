@@ -1,11 +1,11 @@
-module File_ro = File_ro
-module File_rw = File_rw
+module Ro = File_ro
+module Rw = File_rw
 
 module Unix_perm = Stat.Unix_perm
 module Stat = Stat
 
-type ('a, 'r) ro = ('a, 'r) File_ro.t
-type ('a, 'r) rw = ('a, 'r) File_rw.t
+type ('a, 'r) ro = ('a, 'r) Ro.t
+type ('a, 'r) rw = ('a, 'r) Rw.t
 
 let stat (type a) ((t, ops) : (a, _) ro) =
   let module X = (val ops#read) in

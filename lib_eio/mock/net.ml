@@ -67,6 +67,10 @@ type ('a, 'r) t =
     ; raw : 'a -> Impl.t
     ; ..> as 'r))
 
+type 'a t' = ('a, 'a network) t
+
+type r = T : 'a t' -> r [@@unboxed]
+
 let raw (type a) ((t, ops) : (a, _) t) = ops#raw t
 
 let make : string -> _ t =
@@ -111,10 +115,10 @@ module Listening_socket_impl = struct
   let on_accept t = t.on_accept
 
   let accept t ~sw =
-      let socket, addr = Handler.run t.on_accept in
-      Flow.attach_to_switch (socket : Flow.t) sw;
+      let ((Flow.T socket) as flow), addr = Handler.run t.on_accept in
+      Flow.attach_to_switch socket sw;
       traceln "%s: accepted connection from %a" t.label Eio.Net.Sockaddr.pp addr;
-      Flow.as_stream_socket socket, addr
+      Flow.Cast.as_stream_socket flow, addr
 
   let close t =
     traceln "%s: closed" t.label
@@ -146,7 +150,7 @@ module Listening_socket = struct
   let raw (type a) ((t, ops) : (a, _) t) = ops#raw t
 end
 
-let listening_socket ?listening_addr label : _ Listening_socket.t' =
+let listening_socket ?listening_addr label =
   let resource_store = Eio.Resource_store.create () in
   let ops =
     object
@@ -156,9 +160,15 @@ let listening_socket ?listening_addr label : _ Listening_socket.t' =
       method resource_store = resource_store
     end
   in
-  (Listening_socket_impl.make ?listening_addr label, ops)
+  Listening_socket.T (Listening_socket_impl.make ?listening_addr label, ops)
 
 let on_accept l actions =
   let r = Listening_socket.raw l in
-  let as_accept_pair x = (x :> Flow.t * Eio.Net.Sockaddr.stream) in
+  let as_accept_pair x = (x :> Flow.r * Eio.Net.Sockaddr.stream) in
   Handler.seq r.on_accept (List.map (Action.map as_accept_pair) actions)
+
+module Cast = struct
+  let as_generic (T (a, ops)) =
+    Eio.Net.T
+      (a, (ops :> _ Eio.Net.network))
+end

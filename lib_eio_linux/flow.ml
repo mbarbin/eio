@@ -97,7 +97,7 @@ module Impl = struct
 
   let single_write t bufs = Low_level.writev_single t (truncate_to_iomax bufs)
 
-  let copy t ~src:(Eio.Flow.Source.T (src, ops)) =
+  let copy (type a) t ~src:((src, ops) : (a, _) Eio.Flow.Source.t) =
     match Eio.Resource_store.find ops#resource_store ~key:Eio_unix.Fd.key.key with
     | Some fd -> fast_copy_try_splice (fd src) t
     | None ->
@@ -127,7 +127,8 @@ module Impl = struct
   let truncate = Low_level.ftruncate
 end
 
-let of_fd fd = Eio_unix.Flow.Pi.make (module Impl) fd
+let of_fd' fd = Eio_unix.Flow.make (module Impl) fd
+let of_fd fd = Eio_unix.Flow.T (of_fd' fd)
 
 let source fd = (of_fd fd |> Eio_unix.Flow.Cast.as_unix_source)
 let sink   fd = (of_fd fd |> Eio_unix.Flow.Cast.as_unix_sink)
@@ -142,4 +143,6 @@ module Secure_random = struct
   let read_methods = []
 end
 
-let secure_random = Eio.Flow.Source.make (module Secure_random) ()
+let secure_random =
+  Eio.Flow.Source.T
+    (Eio.Flow.Source.make (module Secure_random) ())

@@ -146,12 +146,12 @@ let with_open_dir path fn =
   with_open_dir' path (fun dir -> fn (Path dir))
 
 let with_lines path fn =
-  with_open_in path @@ fun flow ->
+  with_open_in path @@ fun (File.Ro.T flow) ->
   let buf = Buf_read.of_flow flow ~max_size:max_int in
   fn (Buf_read.lines buf)
 
 let load (Path (t, path)) =
-  with_open_in (Path (t, path)) @@ fun flow ->
+  with_open_in (Path (t, path)) @@ fun (File.Ro.T flow) ->
   try
     let size = File.size flow in
     if Optint.Int63.(compare size (of_int Sys.max_string_length)) = 1 then
@@ -169,7 +169,7 @@ let load (Path (t, path)) =
     Exn.reraise_with_context ex bt "loading %a" pp (Path (t, path))
 
 let save ?append ~create path data =
-  with_open_out ?append ~create path @@ fun flow ->
+  with_open_out ?append ~create path @@ fun (File.Rw.T flow) ->
   Flow.copy_string data flow
 
 let unlink t =

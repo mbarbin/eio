@@ -21,7 +21,7 @@ let read_one_byte ~sw r =
 let test_poll_add () =
   Eio_linux.run @@ fun _stdenv ->
   Switch.run @@ fun sw ->
-  let r, w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
   let thread = read_one_byte ~sw r in
   Fiber.yield ();
   let w = Eio_unix.Sink.fd w in
@@ -36,7 +36,7 @@ let test_poll_add () =
 let test_poll_add_busy () =
   Eio_linux.run ~queue_depth:2 @@ fun _stdenv ->
   Switch.run @@ fun sw ->
-  let r, w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
   let a = read_one_byte ~sw r in
   let b = read_one_byte ~sw r in
   Fiber.yield ();
@@ -56,14 +56,18 @@ let test_copy () =
   Eio_linux.run ~queue_depth:3 @@ fun _stdenv ->
   Switch.run @@ fun sw ->
   let msg = "Hello!" in
-  let from_pipe, to_pipe = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T from_pipe, Eio_unix.Sink.T to_pipe) = Eio_unix.pipe sw in
   let buffer = Buffer.create 20 in
   Fiber.both
-    (fun () -> Eio.Flow.copy (Eio_unix.Source.Cast.as_generic from_pipe) (Eio.Flow.buffer_sink buffer))
     (fun () ->
-       Eio.Flow.copy (Eio.Flow.string_source msg) (Eio_unix.Sink.Cast.as_generic to_pipe);
-       Eio.Flow.copy (Eio.Flow.string_source msg) (Eio_unix.Sink.Cast.as_generic to_pipe);
-       Eio_unix.Sink.close to_pipe
+      let (Eio.Flow.Sink.T sink) = Eio.Flow.buffer_sink buffer in
+      Eio.Flow.copy from_pipe sink)
+    (fun () ->
+      for _ = 1 to 2 do
+        let (Eio.Flow.Source.T src) = Eio.Flow.string_source msg in
+        Eio.Flow.copy src to_pipe;
+      done;
+      Eio.Flow.close to_pipe
     );
   Alcotest.(check string) "Copy correct" (msg ^ msg) (Buffer.contents buffer);
   Eio_unix.Source.close from_pipe
@@ -73,19 +77,20 @@ let test_direct_copy () =
   Eio_linux.run ~queue_depth:4 @@ fun _stdenv ->
   Switch.run @@ fun sw ->
   let msg = "Hello!" in
-  let from_pipe1, to_pipe1 = Eio_unix.pipe sw in
-  let from_pipe2, to_pipe2 = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T from_pipe1, Eio_unix.Sink.T to_pipe1) = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T from_pipe2, Eio_unix.Sink.T to_pipe2) = Eio_unix.pipe sw in
   let buffer = Buffer.create 20 in
-  let to_output = Eio.Flow.buffer_sink buffer in
+  let (Eio.Flow.Sink.T to_output) = Eio.Flow.buffer_sink buffer in
   Switch.run (fun sw ->
       Fiber.fork ~sw (fun () ->
         Trace.log "copy1";
-        Eio.Flow.copy (Eio_unix.Source.Cast.as_generic from_pipe1) (Eio_unix.Sink.Cast.as_generic to_pipe2);
-        Eio_unix.Sink.close to_pipe2);
+        Eio.Flow.copy from_pipe1 to_pipe2;
+        Eio.Flow.close to_pipe2);
       Fiber.fork ~sw (fun () ->
         Trace.log "copy2";
-        Eio.Flow.copy (Eio_unix.Source.Cast.as_generic from_pipe2) to_output);
-      Eio.Flow.copy (Eio.Flow.string_source msg) (Eio_unix.Sink.Cast.as_generic to_pipe1);
+        Eio.Flow.copy from_pipe2 to_output);
+      (match Eio.Flow.string_source msg with
+       | Eio.Flow.Source.T src -> Eio.Flow.copy src to_pipe1);
       Eio_unix.Sink.close to_pipe1;
     );
   Alcotest.(check string) "Copy correct" msg (Buffer.contents buffer);
@@ -96,7 +101,7 @@ let test_direct_copy () =
 let test_iovec () =
   Eio_linux.run ~queue_depth:4 @@ fun _stdenv ->
   Switch.run @@ fun sw ->
-  let from_pipe, to_pipe = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T from_pipe, Eio_unix.Sink.T to_pipe) = Eio_unix.pipe sw in
   let from_pipe = Eio_unix.Source.fd from_pipe in
   let to_pipe = Eio_unix.Sink.fd to_pipe in
   let message = Cstruct.of_string "Got [   ] and [   ]" in
@@ -122,8 +127,8 @@ let test_no_sqe () =
     Switch.run @@ fun sw ->
     for _ = 1 to 8 do
       Fiber.fork ~sw (fun () ->
-          let r, _w = Eio_unix.pipe sw in
-          ignore (Eio.Flow.single_read (Eio_unix.Source.Cast.as_generic r) (Cstruct.create 1) : int);
+          let (Eio_unix.Source.T r, _w) = Eio_unix.pipe sw in
+          ignore (Eio.Flow.single_read r (Cstruct.create 1) : int);
           assert false
         )
     done;
@@ -167,8 +172,8 @@ let test_statx () =
   Eio_linux.run ~queue_depth:4 @@ fun (Env env) ->
   let ( / ) = Eio.Path.( / ) in
   let path = env#cwd / "test2.data" in
-  Eio.Path.with_open_out path ~create:(`Or_truncate 0o600) @@ fun file ->
-  Eio.Flow.copy_string "hello" (Eio.File.Rw.to_sink file);
+  Eio.Path.with_open_out path ~create:(`Or_truncate 0o600) @@ fun (Eio.File.Rw.T file) ->
+  Eio.Flow.copy_string "hello" file;
   let buf = Uring.Statx.create () in
   let test expected_len ~follow dir path =
     Eio_linux.Low_level.statx ~follow ~mask:X.Mask.(type' + size) dir path buf;
@@ -177,7 +182,7 @@ let test_statx () =
   in
   (* Lookup via cwd *)
   test 5L ~follow:false Cwd "test2.data";
-  Eio.Flow.copy_string "+" (Eio.File.Rw.to_sink file);
+  Eio.Flow.copy_string "+" file;
   (* Lookup via file FD *)
   Switch.run (fun sw ->
       let fd = Eio_linux.Low_level.openat2 ~sw
@@ -190,7 +195,7 @@ let test_statx () =
       test 6L ~follow:false (FD fd) ""
     );
   (* Lookup via directory FD *)
-  Eio.Flow.copy_string "+" (Eio.File.Rw.to_sink file);
+  Eio.Flow.copy_string "+" file;
   Switch.run (fun sw ->
       let fd = Eio_linux.Low_level.openat2 ~sw
           ~access:`R

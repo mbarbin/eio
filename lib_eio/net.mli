@@ -67,11 +67,19 @@ module type NETWORK = sig
   val getnameinfo : t -> Sockaddr.t -> (string * string)
 end
 
+class type ['a] network = object
+  method network : (module NETWORK with type t = 'a)
+end
+
 type ('a, 'r) t =
   ('a *
    (< network : (module NETWORK with type t = 'a)
-   ; ..
-   > as 'r))
+    ; ..
+    > as 'r))
+
+type 'a t' = ('a, 'a network) t
+
+type r = T : 'a t' -> r [@@unboxed]
 
 (** {2 Out-bound Connections} *)
 
@@ -241,14 +249,9 @@ val getnameinfo : _ t -> Sockaddr.t -> (string * string)
 
 (** {2 Closing} *)
 
-val close : [> `Close] r -> unit
+val close : _ Closable.t -> unit
 (** Alias of {!Resource.close}. *)
 
 (** {2 Provider Interface} *)
 
-module Pi : sig
-  val network
-    : (module NETWORK with type t = 'a)
-    -> 'a
-    -> ('a, < network : (module NETWORK with type t = 'a) >) t
-end
+val make : (module NETWORK with type t = 'a) -> 'a -> 'a t'

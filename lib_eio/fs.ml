@@ -53,14 +53,14 @@ module Pi = struct
   module type DIR = sig
     type t
 
-    val open_in : t -> sw:Switch.t -> path -> _ File.ro
+    val open_in : t -> sw:Switch.t -> path -> File.Ro.r
 
     val open_out :
       t ->
       sw:Switch.t ->
       append:bool ->
       create:create ->
-      path -> _ File.rw
+      path -> File.Rw.r
 
     val mkdir : t -> perm:File.Unix_perm.t -> path -> unit
     val open_dir : t -> sw:Switch.t -> path -> [`Close | dir_ty] r

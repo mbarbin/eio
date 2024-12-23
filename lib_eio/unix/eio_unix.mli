@@ -54,10 +54,11 @@ module Cap = Cap
 
 (** The set of resources provided to a process on a Unix-compatible system. *)
 module Stdenv : sig
+  (* CR mbarbin: Replace the net part by [Net.r]? *)
   type ('net, 'net_r) base_e = <
-    stdin  : Eio.Flow.source;
-    stdout : Eio.Flow.sink;
-    stderr : Eio.Flow.sink;
+    stdin  : Eio.Flow.Source.r;
+    stdout : Eio.Flow.Sink.r;
+    stderr : Eio.Flow.Sink.r;
     net : ('net, 'net_r) Net.t;
     domain_mgr : Eio.Domain_manager.t;
     process_mgr : Process.mgr;
@@ -65,7 +66,7 @@ module Stdenv : sig
     mono_clock : Eio.Time.Mono.ty r;
     fs : Eio.Path.t;
     cwd : Eio.Path.t;
-    secure_random : Eio.Flow.source;
+    secure_random : Eio.Flow.Source.r;
     debug : Eio.Debug.t;
     backend_id : string;
   >
@@ -87,7 +88,7 @@ module Private : sig
     | Await_readable : Unix.file_descr -> unit Effect.t      (** See {!await_readable} *)
     | Await_writable : Unix.file_descr -> unit Effect.t      (** See {!await_writable} *)
     | Get_monotonic_clock : Eio.Time.Mono.ty r Effect.t
-    | Pipe : Eio.Switch.t -> (Source.t * Sink.t) Effect.t    (** See {!pipe} *)
+    | Pipe : Eio.Switch.t -> (Source.r * Sink.r) Effect.t    (** See {!pipe} *)
 
   module Rcfd = Rcfd
 

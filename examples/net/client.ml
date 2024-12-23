@@ -10,12 +10,12 @@ module Write = Eio.Buf_write
 let run ~net ~addr =
   Switch.run ~name:"client" @@ fun sw ->
   traceln "Connecting to server at %a..." Eio.Net.Sockaddr.pp addr;
-  let flow = Eio.Net.connect ~sw net addr in
+  let (Eio.Net.Stream_socket.T flow) = Eio.Net.connect ~sw net addr in
   (* We use a buffered writer here so we can create the message in multiple
      steps but still send it efficiently as a single packet: *)
-  Write.with_sink (Eio.Net.Stream_socket.Cast.as_sink flow) @@ fun to_server ->
+  Write.with_sink flow @@ fun to_server ->
   Write.string to_server "Hello";
   Write.char to_server ' ';
   Write.string to_server "from client\n";
-  let reply = Read.(parse_exn take_all) (Eio.Net.Stream_socket.Cast.as_source flow) ~max_size:100 in
+  let reply = Read.(parse_exn take_all) flow ~max_size:100 in
   traceln "Got reply %S" reply

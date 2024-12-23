@@ -22,9 +22,9 @@ let run main =
   (* SIGPIPE makes no sense in a modern application. *)
   Sys.(set_signal sigpipe Signal_ignore);
   Eio_unix.Process.install_sigchld_handler ();
-  let stdin = (Flow.of_fd Eio_unix.Fd.stdin |> Eio_unix.Flow.Cast.as_source) in
-  let stdout = (Flow.of_fd Eio_unix.Fd.stdout |> Eio_unix.Flow.Cast.as_sink) in
-  let stderr = (Flow.of_fd Eio_unix.Fd.stderr |> Eio_unix.Flow.Cast.as_sink) in
+  let stdin = (Flow.of_fd Eio_unix.Fd.stdin |> Eio_unix.Flow.Cast.as_generic_source) in
+  let stdout = (Flow.of_fd Eio_unix.Fd.stdout |> Eio_unix.Flow.Cast.as_generic_sink) in
+  let stderr = (Flow.of_fd Eio_unix.Fd.stderr |> Eio_unix.Flow.Cast.as_generic_sink) in
   let net = Net.v () in
   Domain_mgr.run_event_loop main @@ (Eio_unix.Stdenv.Env (object
     method stdin = stdin

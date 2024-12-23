@@ -69,8 +69,8 @@ module Impl = struct
       while true do rsb (single_write dst) done
     with End_of_file -> ()
 
-  let copy t ~src =
-    let Eio.Flow.Source.T (src_t, ops) = src in
+  let copy (type a) t ~src =
+    let ((src_t, ops) : (a, _) Eio.Flow.Source.t) = src in
     let module Src = (val ops#source) in
     let rec aux = function
       | Eio.Flow.Read_source_buffer rsb :: _ -> copy_with_rsb (rsb src_t) t
@@ -120,7 +120,8 @@ module Impl = struct
   let close = Eio_unix.Fd.close
 end
 
-let of_fd fd = Eio_unix.Flow.Pi.make (module Impl) fd
+let of_fd' fd = Eio_unix.Flow.make (module Impl) fd
+let of_fd fd = Eio_unix.Flow.T (of_fd' fd)
 
 module Secure_random = struct
   type t = unit
@@ -132,4 +133,6 @@ module Secure_random = struct
   let read_methods = []
 end
 
-let secure_random = Eio.Flow.Source.make (module Secure_random) ()
+let secure_random =
+  Eio.Flow.Source.T
+    (Eio.Flow.Source.make (module Secure_random) ())

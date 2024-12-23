@@ -11,12 +11,13 @@ let run_fiber file =
   done
 
 let run env =
-  Eio.Path.with_open_out ~create:(`If_missing 0o600) (env#cwd / "test-stat") @@ fun file ->
+  Eio.Path.with_open_out ~create:(`If_missing 0o600) (env#cwd / "test-stat")
+  @@ fun (Eio.File.Rw.T file) ->
   [1; 10] |> List.map (fun par ->
       let t0 = Unix.gettimeofday () in
       Switch.run (fun sw ->
           for _  = 1 to par do
-            Fiber.fork ~sw (fun () -> run_fiber (Eio.File.Rw.to_ro file))
+            Fiber.fork ~sw (fun () -> run_fiber file)
           done
         );
       let t1 = Unix.gettimeofday () in

@@ -140,7 +140,7 @@ type ('a, 'r) t =
 
 type 'a t' = ('a, 'a flow) t
 
-type r = T : 'a t' -> r
+type r = T : 'a t' -> r [@@unboxed]
 
 let raw (type a) ((t, ops) : (a, _) t) = ops#raw t
 
@@ -166,3 +166,9 @@ let make ?pp label : _ t' =
      method sink = (module Mock_flow : Eio.Flow.SINK with type t = Mock_flow.t)
      method resource_store = resource_store
    end)
+
+module Cast = struct
+  let as_stream_socket (T (a, ops)) =
+    Eio.Net.Stream_socket.T
+      (a, (ops :> _ Eio.Net.Stream_socket.stream_socket))
+end

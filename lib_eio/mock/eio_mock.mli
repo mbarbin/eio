@@ -114,9 +114,9 @@ module Flow : sig
 
   type 'a t' = ('a, 'a flow) t
 
-  type r = T : 'a t' -> r
+  type r = T : 'a t' -> r [@@unboxed]
 
-  val make : ?pp:string Fmt.t -> string -> r
+  val make : ?pp:string Fmt.t -> string -> Mock_flow.t t'
   (** [make label] is a mock Eio flow.
       It can be used as a source, sink, or two-way flow.
       @param pp Printer to use to display the data. *)
@@ -144,13 +144,20 @@ module Net : sig
     type t
   end
 
-  type 'r t =
-    | Network :
-        ('a *
-         < network : (module Eio.Net.NETWORK with type t = 'a)
-         ; raw : 'a -> Impl.t
-         ; ..> as 'r)
-        -> 'r t [@@unboxed]
+  class type ['a] network = object
+    method network : (module Eio.Net.NETWORK with type t = 'a)
+    method raw : 'a -> Impl.t
+  end
+
+  type ('a, 'r) t =
+    ('a *
+     (< network : (module Eio.Net.NETWORK with type t = 'a)
+      ; raw : 'a -> Impl.t
+      ; ..> as 'r))
+
+  type 'a t' = ('a, 'a network) t
+
+  type r = T : 'a t' -> r [@@unboxed]
 
   module Listening_socket : sig
     class type ['a] listening_socket = object
@@ -173,10 +180,7 @@ module Net : sig
     type r = T : 'a t' -> r
   end
 
-  val make : string -> (Impl.t *
-  < network : (module Eio.Net.NETWORK with type t = Impl.t);
-    raw : Impl.t -> Impl.t >)
- t
+  val make : string -> Impl.t t'
   (** [make label] is a new mock network. *)
 
   val on_connect : _ t -> Eio.Net.Stream_socket.r Handler.actions -> unit
@@ -193,24 +197,19 @@ module Net : sig
   val on_getnameinfo : _ t -> (string * string) Handler.actions -> unit
 
   val listening_socket :
-    ?listening_addr:Eio.Net.Sockaddr.stream -> string -> _ Listening_socket.t
+    ?listening_addr:Eio.Net.Sockaddr.stream -> string -> Listening_socket.r
   (** [listening_socket label] can be configured to provide mock connections.
 
       If [listening_addr] is not provided, a dummy value will be reported. *)
 
   val on_accept :
     _ Listening_socket.t ->
-    (_ Flow.t * Eio.Net.Sockaddr.stream) Handler.actions ->
+    (Flow.r * Eio.Net.Sockaddr.stream) Handler.actions ->
     unit
   (** [on_accept socket actions] configures how to respond when the server calls "accept". *)
 
   module Cast : sig
-    val as_generic :
-      ('a *
-       (< network : (module Eio.Net.NETWORK with type t = 'a)
-        ; raw : 'a -> Impl.t
-        ; .. > as 'b)) t
-      -> ('a, 'b) Eio.Net.t
+    val as_generic : r -> Eio.Net.r
   end
 end
 
