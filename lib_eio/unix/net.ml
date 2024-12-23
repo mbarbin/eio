@@ -74,12 +74,10 @@ module type S = sig
 end
 
 type ('a, 'r) t =
-  | Network :
-      ('a *
-       < network : (module Eio.Net.NETWORK with type t = 'a)
-       ; network_unix : (module S with type t = 'a)
-       ; ..> as 'r)
-      -> ('a, 'r) t [@@unboxed]
+  ('a *
+   < network : (module Eio.Net.NETWORK with type t = 'a)
+   ; network_unix : (module S with type t = 'a)
+   ; ..> as 'r)
 
 (* CR mbarbin: This is temporary code that I use to be able to compile
    some code that currently does not make use of [Eio_unix] specific
@@ -102,20 +100,18 @@ module To_generic (X : S) : Eio.Net.NETWORK with type t = X.t = struct
     end
 
 module Cast = struct
-  let as_generic (Network t) = Eio.Net.Network t
+  let as_generic (t : _ t) = Eio.Net.Network t
 end
 
 let accept ~sw (Listening_socket.T (t, ops)) =
   let module X = (val ops#unix_listening_socket) in
   X.accept t ~sw
 
-let listen (type a r) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : (a, r) t) =
-  let (Network (t, ops)) = t in
+let listen (type a) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw ((t, ops) : (a, _) t) =
   let module X = (val ops#network_unix) in
   X.listen t ~reuse_addr ~reuse_port ~backlog ~sw
 
-let connect (type a r) ~sw (t : (a, r) t) addr =
-  let (Network (t, ops)) = t in
+let connect (type a) ~sw ((t, ops) : (a, _) t) addr =
   let module X = (val ops#network_unix) in
   try X.connect t ~sw addr
   with Eio.Exn.Io _ as ex ->
@@ -125,7 +121,7 @@ let connect (type a r) ~sw (t : (a, r) t) addr =
 module Pi = struct
   let make (type a) (module X : S with type t = a) (t : a) =
     let module G = To_generic (X) in
-    Network (t, object
+    (t, object
       method network = (module G : Eio.Net.NETWORK with type t = a)
       method network_unix = (module X : S with type t = a)
     end)

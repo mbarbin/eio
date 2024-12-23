@@ -30,12 +30,10 @@ module type S = sig
 end
 
 type ('a, 'r) t =
-  | Network :
-      ('a *
-       < network : (module Eio.Net.NETWORK with type t = 'a)
-       ; network_unix : (module S with type t = 'a)
-       ; .. > as 'r)
-      -> ('a, 'r) t [@@unboxed]
+  ('a *
+   < network : (module Eio.Net.NETWORK with type t = 'a)
+   ; network_unix : (module S with type t = 'a)
+   ; .. > as 'r)
 
 module Cast : sig
   val as_generic :
