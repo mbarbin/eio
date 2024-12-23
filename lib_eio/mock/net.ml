@@ -66,7 +66,7 @@ type 'r t =
 [@@unboxed]
 
 module Cast = struct
-  let as_generic (Network t) = Eio.Net.Network t
+  let as_generic (Network t) = (t : _ Eio.Net.t)
 end
 
 let raw (type a) (Network (t, ops) : a t) = ops#raw t

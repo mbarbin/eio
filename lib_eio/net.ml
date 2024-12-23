@@ -301,21 +301,17 @@ module type NETWORK = sig
   val getnameinfo : t -> Sockaddr.t -> (string * string)
 end
 
-type 'r t =
-    Network :
-      ('a *
-       < network : (module NETWORK with type t = 'a)
-       ; ..> as 'r)
-      -> 'r t [@@unboxed]
-
-type packed = Net : 'r t -> packed
+type ('a, 'r) t =
+  ('a *
+   < network : (module NETWORK with type t = 'a)
+   ; ..
+   > as 'r)
 
 module Pi = struct
   let network (type t) (module X : NETWORK with type t = t) (t : t) =
-    Network
-      (t, object
-         method network = (module X : NETWORK with type t = t)
-       end)
+    (t, object
+      method network = (module X : NETWORK with type t = t)
+    end)
 end
 
 let accept ~sw (Listening_socket.T (t, ops)) =
@@ -351,27 +347,23 @@ let recv (Datagram_socket.T (t, ops)) buf =
   let module X = (val ops#datagram_socket) in
   X.recv t buf
 
-let listen (type a) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : a t) =
-  let (Network (t, ops)) = t in
+let listen (type a) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw ((t, ops) : (a, _) t) =
   let module X = (val ops#network) in
   X.listen t ~reuse_addr ~reuse_port ~backlog ~sw
 
-let connect (type a) ~sw (t : a t) addr =
-  let (Network (t, ops)) = t in
+let connect (type a) ~sw ((t, ops) : (a, _) t) addr =
   let module X = (val ops#network) in
   try X.connect t ~sw addr
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
     Exn.reraise_with_context ex bt "connecting to %a" Sockaddr.pp addr
 
-let datagram_socket (type a) ?(reuse_addr=false) ?(reuse_port=false) ~sw (t : a t) addr =
-  let (Network (t, ops)) = t in
+let datagram_socket (type a) ?(reuse_addr=false) ?(reuse_port=false) ~sw ((t, ops) : (a, _) t) addr =
   let module X = (val ops#network) in
   let addr = (addr :> [Sockaddr.datagram | `UdpV4 | `UdpV6]) in
   X.datagram_socket t ~reuse_addr ~reuse_port ~sw addr
 
-let getaddrinfo (type a) ?(service="") (t : a t) hostname =
-  let (Network (t, ops)) = t in
+let getaddrinfo (type a) ?(service="") ((t, ops) : (a, _) t) hostname =
   let module X = (val ops#network) in
   X.getaddrinfo t ~service hostname
 
@@ -389,8 +381,7 @@ let getaddrinfo_datagram ?service t hostname =
       | _ -> None
     )
 
-let getnameinfo (type a) (t : a t) sockaddr =
-  let (Network (t, ops)) = t in
+let getnameinfo (type a) ((t, ops) : (a, _) t) sockaddr =
   let module X = (val ops#network) in
   X.getnameinfo t sockaddr
 

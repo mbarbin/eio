@@ -226,15 +226,11 @@ module type NETWORK = sig
   val getnameinfo : t -> Sockaddr.t -> (string * string)
 end
 
-type 'r t =
-    Network :
-      ('a *
-       < network : (module NETWORK with type t = 'a)
-       ; ..
-       > as 'r)
-      -> 'r t [@@unboxed]
-
-type packed = Net : 'r t -> packed
+type ('a, 'r) t =
+  ('a *
+   < network : (module NETWORK with type t = 'a)
+   ; ..
+   > as 'r)
 
 (** {2 Out-bound Connections} *)
 
@@ -413,5 +409,5 @@ module Pi : sig
   val network
     : (module NETWORK with type t = 'a)
     -> 'a
-    -> ('a * < network : (module NETWORK with type t = 'a) >) t
+    -> ('a, 'a * < network : (module NETWORK with type t = 'a) >) t
 end

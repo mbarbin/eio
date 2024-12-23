@@ -201,7 +201,7 @@ module Net : sig
        (< network : (module Eio.Net.NETWORK with type t = 'a)
         ; raw : 'a -> Impl.t
         ; .. > as 'b)) t
-      -> ('a * 'b) Eio.Net.t
+      -> ('a, 'a * 'b) Eio.Net.t
   end
 end
 

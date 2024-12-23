@@ -100,7 +100,7 @@ module To_generic (X : S) : Eio.Net.NETWORK with type t = X.t = struct
     end
 
 module Cast = struct
-  let as_generic (t : _ t) = Eio.Net.Network t
+  let as_generic (t : _ t) = (t : _ Eio.Net.t)
 end
 
 let accept ~sw (Listening_socket.T (t, ops)) =
