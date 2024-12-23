@@ -29,17 +29,17 @@ module type S = sig
   val getnameinfo : t -> Eio.Net.Sockaddr.t -> (string * string)
 end
 
-type 'r t =
+type ('a, 'r) t =
   | Network :
       ('a *
        < network : (module Eio.Net.NETWORK with type t = 'a)
        ; network_unix : (module S with type t = 'a)
        ; .. > as 'r)
-      -> 'r t [@@unboxed]
+      -> ('a, 'r) t [@@unboxed]
 
 module Cast : sig
   val as_generic :
-    ('a *
+    ('a, 'a *
       (< network : (module Eio.Net.NETWORK with type t = 'a)
        ; network_unix : (module S with type t = 'a)
        ; .. > as 'b)) t
@@ -59,7 +59,7 @@ val connect : sw:Switch.t -> _ t -> Eio.Net.Sockaddr.stream -> Stream_socket.t
 
 module Pi : sig
   val make : (module S with type t = 'a) -> 'a ->
-  ('a *
+  ('a, 'a *
   (< network : (module Eio.Net.NETWORK with type t = 'a)
    ; network_unix : (module S with type t = 'a)
    >)) t

@@ -73,13 +73,13 @@ module type S = sig
   val getnameinfo : t -> Eio.Net.Sockaddr.t -> (string * string)
 end
 
-type 'r t =
+type ('a, 'r) t =
   | Network :
       ('a *
        < network : (module Eio.Net.NETWORK with type t = 'a)
        ; network_unix : (module S with type t = 'a)
        ; ..> as 'r)
-      -> 'r t [@@unboxed]
+      -> ('a, 'r) t [@@unboxed]
 
 (* CR mbarbin: This is temporary code that I use to be able to compile
    some code that currently does not make use of [Eio_unix] specific
@@ -109,12 +109,12 @@ let accept ~sw (Listening_socket.T (t, ops)) =
   let module X = (val ops#unix_listening_socket) in
   X.accept t ~sw
 
-let listen (type a) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : a t) =
+let listen (type a r) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : (a, r) t) =
   let (Network (t, ops)) = t in
   let module X = (val ops#network_unix) in
   X.listen t ~reuse_addr ~reuse_port ~backlog ~sw
 
-let connect (type a) ~sw (t : a t) addr =
+let connect (type a r) ~sw (t : (a, r) t) addr =
   let (Network (t, ops)) = t in
   let module X = (val ops#network_unix) in
   try X.connect t ~sw addr
