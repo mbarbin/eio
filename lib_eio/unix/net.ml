@@ -84,20 +84,20 @@ type ('a, 'r) t =
    functionality. I would like to spend more time thinking about this
    once I know more. *)
 module To_generic (X : S) : Eio.Net.NETWORK with type t = X.t = struct
-      include X
+  include X
 
-      let listen t ~reuse_addr ~reuse_port ~backlog ~sw stream =
-        let listening_socket = X.listen t ~reuse_addr ~reuse_port ~backlog ~sw stream in
-        Listening_socket.Cast.as_generic listening_socket
+  let listen t ~reuse_addr ~reuse_port ~backlog ~sw stream =
+    let listening_socket = X.listen t ~reuse_addr ~reuse_port ~backlog ~sw stream in
+    Listening_socket.Cast.as_generic listening_socket
 
-      let connect t ~sw stream =
-        let stream_socket = X.connect t ~sw stream in
-        Stream_socket.Cast.as_generic stream_socket
+  let connect t ~sw stream =
+    let stream_socket = X.connect t ~sw stream in
+    Stream_socket.Cast.as_generic stream_socket
 
-      let datagram_socket t ~reuse_addr ~reuse_port ~sw addr =
-        let datagram_socket = X.datagram_socket t ~reuse_addr ~reuse_port ~sw addr in
-        Datagram_socket.Cast.as_generic datagram_socket
-    end
+  let datagram_socket t ~reuse_addr ~reuse_port ~sw addr =
+    let datagram_socket = X.datagram_socket t ~reuse_addr ~reuse_port ~sw addr in
+    Datagram_socket.Cast.as_generic datagram_socket
+end
 
 let accept ~sw (Listening_socket.T (t, ops)) =
   let module X = (val ops#unix_listening_socket) in
