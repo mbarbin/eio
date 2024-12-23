@@ -98,7 +98,7 @@ let main net domain_mgr ~n_client_domains ~n_server_domains ~n_connections_per_d
 
 let run env =
   let metrics =
-    main (env#net |> Eio_unix.Net.Cast.as_generic) env#domain_mgr
+    main env#net env#domain_mgr
       ~n_client_domains:4
       ~n_server_domains:4
       ~n_connections_per_domain:25

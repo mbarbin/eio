@@ -99,10 +99,6 @@ module To_generic (X : S) : Eio.Net.NETWORK with type t = X.t = struct
         Datagram_socket.Cast.as_generic datagram_socket
     end
 
-module Cast = struct
-  let as_generic (t : _ t) = (t : _ Eio.Net.t)
-end
-
 let accept ~sw (Listening_socket.T (t, ops)) =
   let module X = (val ops#unix_listening_socket) in
   X.accept t ~sw

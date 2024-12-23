@@ -35,15 +35,6 @@ type ('a, 'r) t =
    ; network_unix : (module S with type t = 'a)
    ; .. > as 'r)
 
-module Cast : sig
-  val as_generic :
-    ('a, 'a *
-      (< network : (module Eio.Net.NETWORK with type t = 'a)
-       ; network_unix : (module S with type t = 'a)
-       ; .. > as 'b)) t
-    -> ('a, 'a * 'b) Eio.Net.t
-end
-
 val accept :
   sw:Switch.t ->
   Listening_socket.t ->
