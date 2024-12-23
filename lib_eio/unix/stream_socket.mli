@@ -25,7 +25,7 @@ module Cast : sig
   val as_two_way : t -> Eio.Flow.t
   val as_unix_source : t -> Source.t
   val as_unix_sink : t -> Sink.t
-  val as_generic_stream_socket : t -> Eio.Net.Stream_socket.t
+  val as_generic : t -> Eio.Net.Stream_socket.t
 end
 
 val close : t -> unit

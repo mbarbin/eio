@@ -23,7 +23,7 @@ type t =
       -> t [@@unboxed]
 
 module Cast : sig
-  val as_generic_listening_socket : t -> Eio.Net.Listening_socket.t
+  val as_generic : t -> Eio.Net.Listening_socket.t
 end
 
 val close : t -> unit

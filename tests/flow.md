@@ -164,7 +164,7 @@ Make sure we don't crash on SIGPIPE:
 # Eio_main.run @@ fun env ->
   Switch.run @@ fun sw ->
   let r, w = Eio_unix.pipe sw in
-  Eio.Flow.close r;
+  Eio_unix.Source.close r;
   try
     Eio.Flow.copy_string "Test" (Eio_unix.Sink.Cast.as_generic w);
     assert false

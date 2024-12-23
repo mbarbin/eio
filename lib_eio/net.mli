@@ -131,6 +131,7 @@ module Stream_socket : sig
   module Cast : sig
     val as_source : t -> Flow.source
     val as_sink : t -> Flow.sink
+    val as_flow : t -> Flow.t
   end
 
   val find_store : t -> 'b Resource_store.accessor -> 'b option
@@ -164,6 +165,8 @@ module Listening_socket : sig
          ; ..>)
         -> t [@@unboxed]
 
+  val find_store : t -> 'b Resource_store.accessor -> 'b option
+
   val close : t -> unit
 
   module Pi : sig
@@ -192,6 +195,8 @@ module Datagram_socket : sig
          ; resource_store : 'a Resource_store.t
          ; .. >)
         -> t [@@unboxed]
+
+  val find_store : t -> 'b Resource_store.accessor -> 'b option
 
   val close : t -> unit
 

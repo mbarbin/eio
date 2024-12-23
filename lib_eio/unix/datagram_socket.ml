@@ -10,7 +10,7 @@ type t =
       -> t [@@unboxed]
 
 module Cast = struct
-  let as_generic_datagram_socket (T t) = Eio.Net.Datagram_socket.T t
+  let as_generic (T t) = Eio.Net.Datagram_socket.T t
 end
 
 let close (T (a, ops)) = ops#close a

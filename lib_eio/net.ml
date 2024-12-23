@@ -182,6 +182,7 @@ module Stream_socket = struct
   module Cast = struct
     let as_source (T t) = Flow.Source.T t
     let as_sink (T t) = Flow.Sink.T t
+    let as_flow (T t) = Flow.T t
   end
 
   let find_store (T (t, ops)) { Resource_store. key } =
@@ -223,6 +224,10 @@ module Listening_socket = struct
        ; ..>)
       -> t [@@unboxed]
 
+  let find_store (T (t, ops)) { Resource_store. key } =
+    Resource_store.find ops#resource_store ~key
+    |> Option.map (fun f -> f t)
+
   (* CR mbarbin: Could be using [S.close] instead and simplify [t]. *)
   let close (T (t, ops)) = ops#close t
 
@@ -258,6 +263,10 @@ module Datagram_socket = struct
          ; resource_store : 'a Resource_store.t
          ; .. >)
         -> t [@@unboxed]
+
+  let find_store (T (t, ops)) { Resource_store. key } =
+    Resource_store.find ops#resource_store ~key
+    |> Option.map (fun f -> f t)
 
   (* CR mbarbin: Could be using [S.close] instead and simplify [t]. *)
   let close (T (t, ops)) = ops#close t

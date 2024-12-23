@@ -19,7 +19,7 @@ type t =
       -> t [@@unboxed]
 
 module Cast = struct
-  let as_generic_listening_socket (T t) = Eio.Net.Listening_socket.T t
+  let as_generic (T t) = Eio.Net.Listening_socket.T t
 end
 
 let close (T (a, ops)) = ops#close a
@@ -35,7 +35,7 @@ module Pi = struct
 
       let accept t ~sw =
         let stream_socket, stream = X.accept t ~sw in
-        Stream_socket.Cast.as_generic_stream_socket stream_socket, stream
+        Stream_socket.Cast.as_generic stream_socket, stream
     end in
     let ops =
       object

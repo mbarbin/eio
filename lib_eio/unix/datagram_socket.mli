@@ -10,7 +10,7 @@ type t =
       -> t [@@unboxed]
 
 module Cast : sig
-  val as_generic_datagram_socket : t -> Eio.Net.Datagram_socket.t
+  val as_generic : t -> Eio.Net.Datagram_socket.t
 end
 
 val close : t -> unit

@@ -93,15 +93,15 @@ module To_generic = struct
 
       let listen t ~reuse_addr ~reuse_port ~backlog ~sw stream =
         let listening_socket = X.listen t ~reuse_addr ~reuse_port ~backlog ~sw stream in
-        Listening_socket.Cast.as_generic_listening_socket listening_socket
+        Listening_socket.Cast.as_generic listening_socket
 
       let connect t ~sw stream =
         let stream_socket = X.connect t ~sw stream in
-        Stream_socket.Cast.as_generic_stream_socket stream_socket
+        Stream_socket.Cast.as_generic stream_socket
 
       let datagram_socket t ~reuse_addr ~reuse_port ~sw addr =
         let datagram_socket = X.datagram_socket t ~reuse_addr ~reuse_port ~sw addr in
-        Datagram_socket.Cast.as_generic_datagram_socket datagram_socket
+        Datagram_socket.Cast.as_generic datagram_socket
     end in
     Eio.Net.Pi.network (module G) a
 end

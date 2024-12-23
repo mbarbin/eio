@@ -595,7 +595,7 @@ let send_response socket =
 
 ```ocaml
 # Eio_main.run @@ fun _ ->
-  send_response (Eio_mock.Flow.make "socket");;
+  send_response (Eio_mock.Flow.make "socket" |> Eio_mock.Flow.Cast.as_sink);;
 +socket: wrote "HTTP/1.1 200 OK\r\n"
 +socket: wrote "\r\n"
 +socket: wrote "Body data"
@@ -618,7 +618,7 @@ let send_response socket =
 
 ```ocaml
 # Eio_main.run @@ fun _ ->
-  send_response (Eio_mock.Flow.make "socket");;
+  send_response (Eio_mock.Flow.make "socket" |> Eio_mock.Flow.Cast.as_flow);;
 +socket: wrote "HTTP/1.1 200 OK\r\n"
 +              "\r\n"
 +socket: wrote "Body data"
@@ -672,7 +672,7 @@ and then extended again by our `get` function with the full URL:
   let net = Eio_mock.Net.make "mocknet" in
   Eio_mock.Net.on_getaddrinfo net [`Return [`Tcp (Eio.Net.Ipaddr.V4.loopback, 80)]];
   Eio_mock.Net.on_connect net [`Raise (Eio.Net.err (Connection_failure Timeout))];
-  get ~net ~host:"example.com" ~path:"index.html";;
+  get ~net:(Eio_mock.Net.Cast.as_generic net) ~host:"example.com" ~path:"index.html";;
 +mocknet: getaddrinfo ~service:http example.com
 +mocknet: connect to tcp:127.0.0.1:80
 Exception:
@@ -707,7 +707,7 @@ To avoid this problem, you can use `Eio.Exn.Backend.show` to hide the backend-sp
 - : unit = ()
 
 # Eio_main.run @@ fun env ->
-  let net = Eio.Stdenv.net env in
+  let net = Eio.Stdenv.net env |> Eio_unix.Net.to_generic in
   Switch.run @@ fun sw ->
   Eio.Net.connect ~sw net (`Tcp (Eio.Net.Ipaddr.V4.loopback, 1234));;
 Exception:
