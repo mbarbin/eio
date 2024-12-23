@@ -11,7 +11,7 @@
 
     {[
       let () =
-        Eio_main.run @@ fun env ->
+        Eio_main.run @@ fun (Env env) ->
         Switch.run @@ fun sw ->
         let pool =
           Eio.Executor_pool.create

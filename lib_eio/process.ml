@@ -40,13 +40,23 @@ module type PROCESS = sig
   val signal : t -> int -> unit
 end
 
-type t =
-  | Process :
-      ('a *
-       < process : (module PROCESS with type t = 'a); .. >)
-      -> t [@@unboxed]
+class type ['a] process_c = object
+  method process : (module PROCESS with type t = 'a)
+  method resource_store : 'a Resource_store.t
+end
 
-type process = t
+type ('a, 'r) t =
+  ('a *
+   (< process : (module PROCESS with type t = 'a)
+    ; resource_store : 'a Resource_store.t
+    ; .. > as 'r))
+(** A process. *)
+
+type 'a t' = ('a, 'a process_c) t
+
+type r = T : 'a t' -> r [@@unboxed]
+
+type process = r
 
 module type MGR = sig
   type t
@@ -69,25 +79,37 @@ module type MGR = sig
     process
 end
 
-type mgr =
-  | Mgr :
-      ('a *
-       < mgr : (module MGR with type t = 'a); .. >)
-      -> mgr [@@unboxed]
+class type ['a] mgr_c = object
+  method mgr : (module MGR with type t = 'a)
+  method resource_store : 'a Resource_store.t
+end
+
+type ('a, 'r) mgr =
+  ('a *
+   (< mgr : (module MGR with type t = 'a)
+    ; resource_store : 'a Resource_store.t
+    ; .. > as 'r))
+(** A process manager capable of spawning new processes. *)
+
+type 'a mgr' = ('a, 'a mgr_c) mgr
+
+type mgr_r = Mgr : 'a mgr' -> mgr_r [@@unboxed]
 
 module Pi = struct
 
   let process (type a) (module X : PROCESS with type t = a) (t : a) =
-    Process
-      (t, object
-         method process = (module X : PROCESS with type t = a)
-       end)
+    let resource_store = Resource_store.create () in
+    (t, object
+       method process = (module X : PROCESS with type t = a)
+       method resource_store = resource_store
+     end)
 
   let mgr (type a) (module X : MGR with type t = a) (t : a) =
-    Mgr
-      (t, object
-         method mgr = (module X : MGR with type t = a)
-       end)
+    let resource_store = Resource_store.create () in
+    (t, object
+       method mgr = (module X : MGR with type t = a)
+       method resource_store = resource_store
+     end)
 end
 
 let bad_char = function
@@ -102,7 +124,7 @@ let pp_arg f x =
 
 let pp_args = Fmt.hbox (Fmt.list ~sep:Fmt.sp pp_arg)
 
-let await (Process (v, ops)) =
+let await (type a) ((v, ops) : (a, _) t) =
   let module X = (val ops#process) in
   X.await v
 
@@ -111,18 +133,15 @@ let await_exn ?(is_success = Int.equal 0) proc =
   | `Exited code when is_success code -> ()
   | status -> raise (err (Child_error status))
 
-let pid (t : t) =
-  let (Process (v, ops)) = t in
+let pid (type a) ((v, ops) : (a, _) t) =
   let module X = (val ops#process) in
   X.pid v
 
-let signal (t : t) s =
-  let (Process (v, ops)) = t in
+let signal (type a) ((v, ops) : (a, _) t) s =
   let module X = (val ops#process) in
   X.signal v s
 
-let spawn ~sw (t : mgr) ?cwd ?stdin ?stdout ?stderr ?env ?executable args : t =
-  let (Mgr (v, ops)) = t in
+let spawn (type a) ~sw ((v, ops) : (a, _) mgr) ?cwd ?stdin ?stdout ?stderr ?env ?executable args : r =
   let module X = (val ops#mgr) in
   X.spawn v ~sw
     ?cwd:(cwd :> Path.t option)
@@ -134,22 +153,22 @@ let spawn ~sw (t : mgr) ?cwd ?stdin ?stdout ?stderr ?env ?executable args : t =
 
 let run t ?cwd ?stdin ?stdout ?stderr ?(is_success = Int.equal 0) ?env ?executable args =
   Switch.run ~name:"Process.run" @@ fun sw ->
-  let child = spawn ~sw t ?cwd ?stdin ?stdout ?stderr ?env ?executable args in
+  let T child = spawn ~sw t ?cwd ?stdin ?stdout ?stderr ?env ?executable args in
   match await child with
   | `Exited code when is_success code -> ()
   | status ->
     let ex = err (Child_error status) in
     raise (Exn.add_context ex "running command: %a" pp_args args)
 
-let pipe ~sw (Mgr (v, ops)) =
+let pipe (type a) ~sw ((v, ops) : (a, _) mgr) =
   let module X = (val ops#mgr) in
   X.pipe v ~sw
 
-let parse_out (t : mgr) parse ?cwd ?stdin ?stderr ?is_success ?env ?executable args =
+let parse_out (type a) (t : _ mgr) parse ?cwd ?stdin ?stderr ?is_success ?env ?executable args =
   Switch.run ~name:"Process.parse_out" @@ fun sw ->
   let (Flow.Closable_source.T r), (Flow.Closable_sink.T w) = pipe t ~sw in
   try
-    let child = spawn ~sw t ?cwd ?stdin ~stdout:w ?stderr ?env ?executable args in
+    let T child = spawn ~sw t ?cwd ?stdin ~stdout:w ?stderr ?env ?executable args in
     Flow.close w;
     let output = Buf_read.parse_exn parse r ~max_size:max_int in
     Flow.close r;

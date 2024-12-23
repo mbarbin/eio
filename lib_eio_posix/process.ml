@@ -15,7 +15,9 @@ module Process_impl = struct
   let signal = Low_level.Process.signal
 end
 
-let process proc = Eio_unix.Process.Pi.process (module Process_impl) proc
+let process proc =
+  Eio_unix.Process.T
+    (Eio_unix.Process.Pi.process (module Process_impl) proc)
 
 module Impl = struct
   module T = struct
@@ -43,5 +45,6 @@ module Impl = struct
   include Eio_unix.Process.Make_mgr (T)
 end
 
-let mgr : Eio_unix.Process.mgr =
-  Eio_unix.Process.Pi.mgr_unix (module Impl) ()
+let mgr : Eio_unix.Process.mgr_r =
+  Eio_unix.Process.Mgr
+    (Eio_unix.Process.Pi.mgr_unix (module Impl) ())

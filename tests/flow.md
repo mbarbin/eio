@@ -60,7 +60,7 @@ Exception: End_of_file.
   let src = Eio_mock.Flow.make "src" in
   let dst = Eio_mock.Flow.make "dst" in
   Eio_mock.Flow.on_read src [`Return "foo"; `Return "bar"];
-  Eio.Flow.copy (Eio_mock.Flow.Cast.as_source src) (Eio_mock.Flow.Cast.as_sink dst);;
+  Eio.Flow.copy src dst;;
 +src: read "foo"
 +dst: wrote "foo"
 +src: read "bar"
@@ -140,7 +140,7 @@ Copying from src using `Read_source_buffer`:
 Writing to and reading from a pipe.
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   Switch.run @@ fun sw ->
   let r, w = Eio_unix.pipe sw in
   let msg = "Hello, world" in
@@ -161,7 +161,7 @@ Writing to and reading from a pipe.
 Make sure we don't crash on SIGPIPE:
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   Switch.run @@ fun sw ->
   let r, w = Eio_unix.pipe sw in
   Eio_unix.Source.close r;
@@ -179,7 +179,7 @@ Make sure we don't crash on SIGPIPE:
 Sending a very long vector over a flow should just send it in chunks, not fail:
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   Switch.run @@ fun sw ->
   let r, w = Eio_unix.pipe sw in
   let a = Cstruct.of_string "abc" in

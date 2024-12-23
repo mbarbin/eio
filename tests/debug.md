@@ -8,7 +8,7 @@
 ## Overriding tracing
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let debug = Eio.Stdenv.debug env in
   let my_traceln = {
     Eio.Debug.traceln = fun ?__POS__:_ fmt -> Fmt.epr ("++" ^^ fmt ^^ "@.")

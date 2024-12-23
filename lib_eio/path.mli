@@ -12,7 +12,7 @@
           (dir / "output.txt") "the data"
 
       let () =
-        Eio_main.run @@ fun env ->
+        Eio_main.run @@ fun (Env env) ->
         run (Eio.Stdenv.cwd env)
     ]}
 

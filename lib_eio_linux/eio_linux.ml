@@ -192,7 +192,7 @@ end
 
 let process =
   let ops = Eio_unix.Process.Pi.process (module Process_impl) in
-  fun proc -> ops proc
+  fun proc -> Eio_unix.Process.T (ops proc)
 
 (* fchdir wants just a directory FD, not an FD and a path like the *at functions. *)
 let with_dir dir_fd path fn =
@@ -230,8 +230,9 @@ module Process_mgr = struct
   include Eio_unix.Process.Make_mgr (T)
 end
 
-let process_mgr : Eio_unix.Process.mgr =
-  Eio_unix.Process.Pi.mgr_unix (module Process_mgr) ()
+let process_mgr : Eio_unix.Process.mgr_r =
+  Eio_unix.Process.Mgr
+    (Eio_unix.Process.Pi.mgr_unix (module Process_mgr) ())
 
 let wrap_backtrace fn x =
   match fn x with

@@ -140,7 +140,7 @@ let main out =
 We use [Eio_main.run][] to run the event loop and call `main` from there:
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   main (Eio.Stdenv.stdout env);;
 Hello, world!
 - : unit = ()
@@ -447,7 +447,7 @@ We need that here because otherwise the server would keep waiting for new connec
 the test would never finish.
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   main
     ~net:(Eio.Stdenv.net env |> Eio_unix.Net.to_generic)
     ~addr:(`Tcp (Eio.Net.Ipaddr.V4.loopback, 8080));;
@@ -526,7 +526,7 @@ let cli ~stdin ~stdout =
 Let's try it with some test data (you could use the real stdin if you prefer):
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   cli
     ~stdin:(Eio.Flow.string_source "help\nexit\nquit\nbye\nstop\n")
     ~stdout:(Eio.Stdenv.stdout env);;
@@ -690,7 +690,7 @@ it can be annoying to have the full backend-specific error displayed:
 
 <!-- $MDX non-deterministic=command -->
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let net = Eio.Stdenv.net env in
   Switch.run @@ fun sw ->
   Eio.Net.connect ~sw net (`Tcp (Eio.Net.Ipaddr.V4.loopback, 1234));;
@@ -706,7 +706,7 @@ To avoid this problem, you can use `Eio.Exn.Backend.show` to hide the backend-sp
 # Eio.Exn.Backend.show := false;;
 - : unit = ()
 
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let net = Eio.Stdenv.net env |> Eio_unix.Net.to_generic in
   Switch.run @@ fun sw ->
   Eio.Net.connect ~sw net (`Tcp (Eio.Net.Ipaddr.V4.loopback, 1234));;
@@ -731,7 +731,7 @@ let ( / ) = Eio.Path.( / )
 <!--
 Cleanup previous runs due to [dune runtest --watch] not doing it
 ```ocaml
-Eio_main.run @@ fun env ->
+Eio_main.run @@ fun (Env env) ->
 let cwd = Eio.Stdenv.cwd env in
 ["link-to-dir1"; "link-to-tmp"; "test.txt"; "dir1"]
 |> List.iter (fun p -> Eio.Path.rmtree ~missing_ok:true (cwd / p))
@@ -746,7 +746,7 @@ let cwd = Eio.Stdenv.cwd env in
 You can save a whole file using `Path.save`:
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let path = Eio.Stdenv.cwd env / "test.txt" in
   traceln "Saving to %a" Eio.Path.pp path;
   Eio.Path.save ~create:(`Exclusive 0o600) path "line one\nline two\n";;
@@ -761,7 +761,7 @@ To load a file, you can use `load` to read the whole thing into a string,
 the lines (a convenience function that uses `Buf_read.lines`):
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let path = Eio.Stdenv.cwd env / "test.txt" in
   Eio.Path.with_lines path (fun lines ->
      Seq.iter (traceln "Processing %S") lines
@@ -786,7 +786,7 @@ let try_mkdir path =
 ```
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let cwd = Eio.Stdenv.cwd env in
   try_mkdir (cwd / "dir1");
   try_mkdir (cwd / "../dir2");
@@ -804,7 +804,7 @@ The checks also apply to following symlinks:
   Unix.symlink (Filename.get_temp_dir_name ()) "link-to-tmp";;
 - : unit = ()
 
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let cwd = Eio.Stdenv.cwd env in
   try_save (cwd / "dir1/file1") "A";
   try_save (cwd / "link-to-dir1/file2") "B";
@@ -818,7 +818,7 @@ The checks also apply to following symlinks:
 You can use `open_dir` (or `with_open_dir`) to create a restricted capability to a subdirectory:
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let cwd = Eio.Stdenv.cwd env in
   Eio.Path.with_open_dir (cwd / "dir1") @@ fun dir1 ->
   try_save (dir1 / "file4") "D";
@@ -860,7 +860,7 @@ Fatal error: exception Sys_error("/etc/passwd: Not permitted in capability mode"
 Spawning a child process can be done using the [Eio.Process][] module:
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
   Eio.Process.run proc_mgr ["echo"; "hello"];;
 hello
@@ -871,10 +871,11 @@ There are various optional arguments for setting the process's current directory
 For example, we can use `tr` to convert some text to upper-case:
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
+  let (Eio.Source.T src) = (Eio.Flow.string_source "One two three\n") in
   Eio.Process.run proc_mgr ["tr"; "a-z"; "A-Z"]
-    ~stdin:(Eio.Flow.string_source "One two three\n");;
+    ~stdin:src;;
 ONE TWO THREE
 - : unit = ()
 ```
@@ -883,7 +884,7 @@ If you want to capture the output of a process, you can provide a suitable `Eio.
 or use the `parse_out` convenience wrapper:
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
   Eio.Process.parse_out proc_mgr Eio.Buf_read.line ["echo"; "hello"];;
 - : string = "hello"
@@ -892,7 +893,7 @@ or use the `parse_out` convenience wrapper:
 All process functions either return the exit status or check that it was zero (success):
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
   Eio.Process.parse_out proc_mgr Eio.Buf_read.take_all ["sh"; "-c"; "exit 3"];;
 Exception:
@@ -909,7 +910,7 @@ descriptors (on systems that support them).
 The standard environment provides a [clock][Eio.Time] with the usual POSIX time:
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let clock = Eio.Stdenv.clock env in
   traceln "The time is now %f" (Eio.Time.now clock);;
 +The time is now 1623940778.270336
@@ -972,7 +973,7 @@ let main ~domain_mgr =
 
 <!-- $MDX non-deterministic=output -->
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   main ~domain_mgr:(Eio.Stdenv.domain_mgr env);;
 +Starting CPU-intensive task...
 +Starting CPU-intensive task...
@@ -1014,7 +1015,7 @@ Usually you will only want one pool for an entire application, so the pool is ty
 <!-- $MDX skip -->
 ```ocaml
 let () =
-  Eio_main.run @@ fun env ->
+  Eio_main.run @@ fun (Env env) ->
   Switch.run @@ fun sw ->
   let pool =
     Eio.Executor_pool.create
@@ -1052,7 +1053,7 @@ let main ~domain_mgr =
 
 <!-- $MDX non-deterministic=output -->
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   main ~domain_mgr:(Eio.Stdenv.domain_mgr env);;
 +Starting CPU-intensive task...
 +Starting CPU-intensive task...
@@ -1260,7 +1261,7 @@ let submit stream request =
 Each item in the stream is a request payload and a resolver for the reply promise.
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let domain_mgr = Eio.Stdenv.domain_mgr env in
   Switch.run @@ fun sw ->
   let stream = Eio.Stream.create 0 in
@@ -1364,7 +1365,7 @@ so that if a cancel happens during a save then we will finish writing the data f
 It can be used like this:
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let dir = Eio.Stdenv.cwd env in
   let t = Atomic_file.of_path (dir / "data") in
   Fiber.both

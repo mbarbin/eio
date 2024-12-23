@@ -9,7 +9,7 @@
 open Eio.Std
 
 let run (fn : clock:float Eio.Time.clock_ty r -> unit) =
-  Eio_main.run @@ fun env ->
+  Eio_main.run @@ fun (Env env) ->
   let clock = Eio.Stdenv.clock env in
   fn ~clock
 ```
@@ -113,7 +113,7 @@ let rec loop () =
 ### Timeouts
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let clock = Eio.Stdenv.mono_clock env in
   Eio.Time.Timeout.(run_exn none) (fun () -> ());
   let t = Eio.Time.Timeout.seconds clock 0.0001 in
@@ -122,7 +122,7 @@ Exception: Eio__Time.Timeout.
 ```
 
 ```ocaml
-# Eio_main.run @@ fun env ->
+# Eio_main.run @@ fun (Env env) ->
   let clock = Eio.Stdenv.mono_clock env in
   let show d =
     let t = Eio.Time.Timeout.seconds clock d in

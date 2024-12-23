@@ -37,7 +37,7 @@ module Stdenv = struct
     stderr : Eio.Flow.Sink.r;
     net : ('net, 'net_r) Net.t;
     domain_mgr : Eio.Domain_manager.t;
-    process_mgr : Process.mgr;
+    process_mgr : Process.mgr_r;
     clock : float Eio.Time.clock_ty r;
     mono_clock : Eio.Time.Mono.ty r;
     fs : Eio.Path.t;

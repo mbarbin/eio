@@ -1,6 +1,6 @@
 (** Example:
     {[
-      # Eio_main.run @@ fun env ->
+      # Eio_main.run @@ fun (Env env) ->
         let proc_mgr = Eio.Stdenv.process_mgr env in
         Eio.Process.parse_out proc_mgr Eio.Buf_read.line ["echo"; "hello"]
     ]}
@@ -46,14 +46,23 @@ module type PROCESS = sig
   val signal : t -> int -> unit
 end
 
-type t =
-  | Process :
-      ('a *
-       < process : (module PROCESS with type t = 'a); .. >)
-      -> t [@@unboxed]
+class type ['a] process_c = object
+  method process : (module PROCESS with type t = 'a)
+  method resource_store : 'a Resource_store.t
+end
+
+type ('a, 'r) t =
+  ('a *
+   (< process : (module PROCESS with type t = 'a)
+    ; resource_store : 'a Resource_store.t
+    ; .. > as 'r))
 (** A process. *)
 
-type process := t
+type 'a t' = ('a, 'a process_c) t
+
+type r = T : 'a t' -> r [@@unboxed]
+
+type process := r
 
 module type MGR = sig
   type t
@@ -76,29 +85,38 @@ module type MGR = sig
     process
 end
 
-type mgr =
-  | Mgr :
-      ('a *
-       < mgr : (module MGR with type t = 'a); .. >)
-      -> mgr [@@unboxed]
+class type ['a] mgr_c = object
+  method mgr : (module MGR with type t = 'a)
+  method resource_store : 'a Resource_store.t
+end
+
+type ('a, 'r) mgr =
+  ('a *
+   (< mgr : (module MGR with type t = 'a)
+    ; resource_store : 'a Resource_store.t
+    ; .. > as 'r))
 (** A process manager capable of spawning new processes. *)
+
+type 'a mgr' = ('a, 'a mgr_c) mgr
+
+type mgr_r = Mgr : 'a mgr' -> mgr_r [@@unboxed]
 
 (** {2 Processes} *)
 
-val pid : t -> int
+val pid : _ t -> int
 (** [pid t] is the process ID of [t]. *)
 
-val await : t  -> exit_status
+val await : _ t  -> exit_status
 (** [await t] waits for process [t] to exit and then reports the status. *)
 
-val await_exn : ?is_success:(int -> bool) -> t  -> unit
+val await_exn : ?is_success:(int -> bool) -> _ t  -> unit
 (** Like {! await} except an exception is raised if does not return a successful
     exit status.
 
     @param is_success Used to determine if an exit code is successful.
                       Default is [Int.equal 0]. *)
 
-val signal : t -> int -> unit
+val signal : _ t -> int -> unit
 (** [signal t i] sends the signal [i] to process [t].
 
     If the process has already exited then this does nothing
@@ -108,14 +126,14 @@ val signal : t -> int -> unit
 
 val spawn :
   sw:Switch.t ->
-  mgr ->
+  _ mgr ->
   ?cwd:Path.t ->
   ?stdin:_ Flow.source ->
   ?stdout:_ Flow.sink ->
   ?stderr:_ Flow.sink ->
   ?env:string array ->
   ?executable:string ->
-  string list -> t
+  string list -> r
 (** [spawn ~sw mgr args] creates a new child process that is connected to the switch [sw].
 
     The child process will be sent {! Sys.sigkill} when the switch is released.
@@ -134,7 +152,7 @@ val spawn :
                       searching $PATH for it if necessary. *)
 
 val run :
-  mgr ->
+  _ mgr ->
   ?cwd:Path.t ->
   ?stdin:_ Flow.source ->
   ?stdout:_ Flow.sink ->
@@ -152,7 +170,7 @@ val run :
     Note: If [spawn] needed to create extra fibers to copy [stdin], etc, then it also waits for those to finish. *)
 
 val parse_out :
-  mgr ->
+  _ mgr ->
   'a Buf_read.parser ->
   ?cwd:Path.t ->
   ?stdin:_ Flow.source ->
@@ -176,7 +194,7 @@ val parse_out :
 
 val pipe
   : sw:Switch.t
-    -> mgr
+    -> _ mgr
     -> Flow.Closable_source.r * Flow.Closable_sink.r
 (** [pipe ~sw mgr] creates a pipe backed by the OS.
 
@@ -185,6 +203,6 @@ val pipe
 
 (** {2 Provider Interface} *)
 module Pi : sig
-  val process : (module PROCESS with type t = 'a) -> 'a -> t
-  val mgr : (module MGR with type t = 'a) -> 'a -> mgr
+  val process : (module PROCESS with type t = 'a) -> 'a -> 'a t'
+  val mgr : (module MGR with type t = 'a) -> 'a -> 'a mgr'
 end

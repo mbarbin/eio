@@ -39,7 +39,7 @@ Before we start, we'll define a wrapper around `Eio_main.run` for the examples b
 # open Eio.Std;;
 
 # let run fn =
-    Eio_main.run @@ fun env ->
+    Eio_main.run @@ fun (Env env) ->
     let domain_mgr = Eio.Stdenv.domain_mgr env in
     fn (Eio.Domain_manager.run domain_mgr);;
 val run : (((unit -> 'a) -> 'a) -> 'b) -> 'b = <fun>

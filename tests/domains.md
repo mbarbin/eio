@@ -8,7 +8,7 @@
 open Eio.Std
 
 let run (fn : Eio.Domain_manager.t -> unit) =
-  Eio_main.run @@ fun env ->
+  Eio_main.run @@ fun (Env env) ->
   fn (Eio.Stdenv.domain_mgr env)
 ```
 

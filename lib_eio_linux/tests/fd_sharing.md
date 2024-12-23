@@ -14,12 +14,12 @@ One domain closes an FD after another domain has enqueued a uring operation
 mentioning it.
 
 ```ocaml
-# Eio_linux.run @@ fun env ->
+# Eio_linux.run @@ fun (Env env) ->
   let dm = env#domain_mgr in
   Switch.run @@ fun sw ->
   let m = Mutex.create () in
   Mutex.lock m;
-  let r, w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
   let ready, set_ready = Promise.create () in
   Fiber.both
     (fun () ->
@@ -28,7 +28,7 @@ mentioning it.
            (fun () ->
               traceln "Domain 1 enqueuing read on FD";
               let buf = Cstruct.create 1 in
-              match Eio.Flow.single_read (Eio_unix.Source.Cast.as_generic r) buf with
+              match Eio.Flow.single_read r buf with
               | _ -> assert false
               | exception End_of_file -> traceln "Read EOF"
            )

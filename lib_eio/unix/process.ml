@@ -69,16 +69,28 @@ let get_env = function
   | Some e -> e
   | None -> Unix.environment ()
 
-type t =
-  | Process :
-      ('a *
-       < process : (module Eio.Process.PROCESS with type t = 'a); .. >)
-      -> t [@@unboxed]
+class type ['a] process_c = object
+  method process : (module Eio.Process.PROCESS with type t = 'a)
+  method resource_store : 'a Eio.Resource_store.t
+end
 
-type process = t
+type ('a, 'r) t =
+  ('a *
+   (< process : (module Eio.Process.PROCESS with type t = 'a)
+    ; resource_store : 'a Eio.Resource_store.t
+    ; .. > as 'r))
+(** A process. *)
+
+type 'a t' = ('a, 'a process_c) t
+
+type r = T : 'a t' -> r [@@unboxed]
+
+type process = r
 
 module Process = struct
-  let as_generic (Process p) = Eio.Process.Process p
+  let as_generic_process (T (t, ops)) =
+    Eio.Process.T
+      (t, (ops :> _ Eio.Process.process_c))
 end
 
 module type MGR_unix = sig
@@ -99,7 +111,7 @@ module type MGR_unix = sig
     ?env:string array ->
     ?executable:string ->
     string list ->
-    Eio.Process.t
+    Eio.Process.r
   val spawn_unix :
     t ->
     sw:Switch.t ->
@@ -111,23 +123,33 @@ module type MGR_unix = sig
     process
 end
 
-type mgr =
-  | Mgr :
-      ('a *
-       < mgr : (module Eio.Process.MGR with type t = 'a)
-       ; mgr_unix : (module MGR_unix with type t = 'a)
-       ; .. >)
-      -> mgr [@@unboxed]
-
-module Mgr = struct
-  let as_generic (Mgr (a, ops)) = Eio.Process.Mgr (a, ops)
+class type ['a] mgr_c = object
+  method mgr : (module Eio.Process.MGR with type t = 'a)
+  method mgr_unix : (module MGR_unix with type t = 'a)
+  method resource_store : 'a Eio.Resource_store.t
 end
+
+type ('a, 'r) mgr =
+  ('a *
+   (< mgr : (module Eio.Process.MGR with type t = 'a)
+    ; mgr_unix : (module MGR_unix with type t = 'a)
+    ; resource_store : 'a Eio.Resource_store.t
+    ; .. > as 'r))
+
+type 'a mgr' = ('a, 'a mgr_c) mgr
+
+type mgr_r = Mgr : 'a mgr' -> mgr_r [@@unboxed]
 
 module Pi = struct
   let process (type a) (module X : Eio.Process.PROCESS with type t = a) (t : a) =
-    Process (t, object method process = (module X : Eio.Process.PROCESS with type t = a) end)
+    let resource_store = Eio.Resource_store.create () in
+    (t, object
+       method process = (module X : Eio.Process.PROCESS with type t = a)
+       method resource_store = resource_store
+     end)
 
   let mgr_unix (type a) (module X : MGR_unix with type t = a) (t : a) =
+    let resource_store = Eio.Resource_store.create () in
     let module X_mgr : Eio.Process.MGR with type t = a = struct
       type t = X.t
 
@@ -137,10 +159,11 @@ module Pi = struct
         let (r, w) = X.pipe t ~sw in
         (Source.Cast.as_closable_generic r, Sink.Cast.as_closable_generic w)
     end in
-    Mgr (t, object
-           method mgr = (module X_mgr : Eio.Process.MGR with type t = a)
-           method mgr_unix = (module X : MGR_unix with type t = a)
-         end)
+    (t, object
+      method mgr = (module X_mgr : Eio.Process.MGR with type t = a)
+      method mgr_unix = (module X : MGR_unix with type t = a)
+      method resource_store = resource_store
+    end)
 end
 
 module Make_mgr (X : sig
@@ -173,12 +196,12 @@ end) = struct
       1, stdout_fd, `Blocking;
       2, stderr_fd, `Blocking;
     ] in
-    X.spawn_unix v ~sw ?cwd ~env ~fds ~executable args |> Process.as_generic
+    X.spawn_unix v ~sw ?cwd ~env ~fds ~executable args |> Process.as_generic_process
 
   let spawn_unix = X.spawn_unix
 end
 
-let spawn_unix ~sw (Mgr (v, ops) : mgr) ?cwd ~fds ?env ?executable args =
+let spawn_unix (type a) ~sw ((v, ops) : (a, _) mgr) ?cwd ~fds ?env ?executable args =
   let module X = (val ops#mgr_unix) in
   let executable = get_executable executable ~args in
   let env = get_env env in
@@ -188,3 +211,9 @@ let sigchld = Eio.Condition.create ()
 
 let install_sigchld_handler () =
   Sys.(set_signal sigchld) (Signal_handle (fun (_:int) -> Eio.Condition.broadcast sigchld))
+
+module Cast = struct
+  let as_generic_process = Process.as_generic_process
+  let as_generic_mgr (Mgr (a, ops)) =
+    Eio.Process.Mgr (a, (ops :> _ Eio.Process.mgr_c))
+end

@@ -6,17 +6,23 @@ open Eio.Std
 
     These extend the types in {!Eio.Process} with support for file descriptors. *)
 
-type t =
-  | Process :
-      ('a *
-       < process : (module Eio.Process.PROCESS with type t = 'a); .. >)
-      -> t [@@unboxed]
-
-type process := t
-
-module Process : sig
-  val as_generic : t -> Eio.Process.t
+class type ['a] process_c = object
+  method process : (module Eio.Process.PROCESS with type t = 'a)
+  method resource_store : 'a Eio.Resource_store.t
 end
+
+type ('a, 'r) t =
+  ('a *
+   (< process : (module Eio.Process.PROCESS with type t = 'a)
+    ; resource_store : 'a Eio.Resource_store.t
+    ; .. > as 'r))
+(** A process. *)
+
+type 'a t' = ('a, 'a process_c) t
+
+type r = T : 'a t' -> r [@@unboxed]
+
+type process := r
 
 module type MGR_unix = sig
   type t
@@ -36,7 +42,7 @@ module type MGR_unix = sig
     ?env:string array ->
     ?executable:string ->
     string list ->
-    Eio.Process.t
+    Eio.Process.r
 
   val spawn_unix :
     t ->
@@ -49,22 +55,31 @@ module type MGR_unix = sig
     process
 end
 
-type mgr =
-  | Mgr :
-      ('a *
-       < mgr : (module Eio.Process.MGR with type t = 'a)
-       ; mgr_unix : (module MGR_unix with type t = 'a)
-       ; .. >)
-      -> mgr [@@unboxed]
+class type ['a] mgr_c = object
+  method mgr : (module Eio.Process.MGR with type t = 'a)
+  method mgr_unix : (module MGR_unix with type t = 'a)
+  method resource_store : 'a Eio.Resource_store.t
+end
 
-module Mgr : sig
-  val as_generic : mgr -> Eio.Process.mgr
+type ('a, 'r) mgr =
+  ('a *
+   (< mgr : (module Eio.Process.MGR with type t = 'a)
+    ; mgr_unix : (module MGR_unix with type t = 'a)
+    ; resource_store : 'a Eio.Resource_store.t
+    ; .. > as 'r))
+
+type 'a mgr' = ('a, 'a mgr_c) mgr
+
+type mgr_r = Mgr : 'a mgr' -> mgr_r [@@unboxed]
+
+module Cast : sig
+  val as_generic_process : r -> Eio.Process.r
+  val as_generic_mgr : mgr_r -> Eio.Process.mgr_r
 end
 
 module Pi : sig
-  val process : (module Eio.Process.PROCESS with type t = 'a) -> 'a -> process
-  val mgr_unix :
-    (module MGR_unix with type t = 'a) -> 'a -> mgr
+  val process : (module Eio.Process.PROCESS with type t = 'a) -> 'a -> 'a t'
+  val mgr_unix : (module MGR_unix with type t = 'a) -> 'a -> 'a mgr'
 end
 
 module Make_mgr (X : sig
@@ -83,7 +98,7 @@ end) : MGR_unix with type t = X.t
 
 val spawn_unix :
     sw:Switch.t ->
-    mgr ->
+    _ mgr ->
     ?cwd:Eio.Path.t ->
     fds:(int * Fd.t * Fork_action.blocking) list ->
     ?env:string array ->
