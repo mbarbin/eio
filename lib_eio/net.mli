@@ -226,17 +226,19 @@ module type NETWORK = sig
   val getnameinfo : t -> Sockaddr.t -> (string * string)
 end
 
-type t =
+type 'r t =
     Network :
       ('a *
        < network : (module NETWORK with type t = 'a)
        ; ..
-       >)
-      -> t [@@unboxed]
+       > as 'r)
+      -> 'r t [@@unboxed]
+
+type packed = Net : 'r t -> packed
 
 (** {2 Out-bound Connections} *)
 
-val connect : sw:Switch.t -> t -> Sockaddr.stream -> Stream_socket.t
+val connect : sw:Switch.t -> _ t -> Sockaddr.stream -> Stream_socket.t
 (** [connect ~sw t addr] is a new socket connected to remote address [addr].
 
     The new socket will be closed when [sw] finishes, unless closed manually first. *)
@@ -245,7 +247,7 @@ val with_tcp_connect :
   ?timeout:Time.Timeout.t ->
   host:string ->
   service:string ->
-  t ->
+  _ t ->
   (Stream_socket.t -> 'b) ->
   'b
 (** [with_tcp_connect ~host ~service t f] creates a tcp connection [conn] to [host] and [service] and executes 
@@ -269,7 +271,7 @@ val with_tcp_connect :
 
 val listen :
   ?reuse_addr:bool -> ?reuse_port:bool -> backlog:int -> sw:Switch.t ->
-  t -> Sockaddr.stream -> Listening_socket.t
+  _ t -> Sockaddr.stream -> Listening_socket.t
 (** [listen ~sw ~backlog t addr] is a new listening socket bound to local address [addr].
 
     The new socket will be closed when [sw] finishes, unless closed manually first.
@@ -354,7 +356,7 @@ val datagram_socket :
      ?reuse_addr:bool
   -> ?reuse_port:bool
   -> sw:Switch.t
-  -> t
+  -> _ t
   -> [< Sockaddr.datagram | `UdpV4 | `UdpV6]
   -> Datagram_socket.t
   (** [datagram_socket ~sw t addr] creates a new datagram socket bound to [addr]. The new 
@@ -380,7 +382,7 @@ val recv : Datagram_socket.t -> Cstruct.t -> Sockaddr.datagram * int
 
 (** {2 DNS queries} *)
 
-val getaddrinfo: ?service:string -> t -> string -> Sockaddr.t list
+val getaddrinfo: ?service:string -> _ t -> string -> Sockaddr.t list
 (** [getaddrinfo ?service t node] returns a list of IP addresses for [node]. [node] is either a domain name or
     an IP address.
 
@@ -389,13 +391,13 @@ val getaddrinfo: ?service:string -> t -> string -> Sockaddr.t list
 
     For a more thorough treatment, see {{:https://man7.org/linux/man-pages/man3/getaddrinfo.3.html} getaddrinfo}. *)
 
-val getaddrinfo_stream: ?service:string -> t -> string -> Sockaddr.stream list
+val getaddrinfo_stream: ?service:string -> _ t -> string -> Sockaddr.stream list
 (** [getaddrinfo_stream] is like {!getaddrinfo}, but filters out non-stream protocols. *)
 
-val getaddrinfo_datagram: ?service:string -> t -> string -> Sockaddr.datagram list
+val getaddrinfo_datagram: ?service:string -> _ t -> string -> Sockaddr.datagram list
 (** [getaddrinfo_datagram] is like {!getaddrinfo}, but filters out non-datagram protocols. *)
 
-val getnameinfo : t -> Sockaddr.t -> (string * string)
+val getnameinfo : _ t -> Sockaddr.t -> (string * string)
 (** [getnameinfo t sockaddr] is [(hostname, service)] corresponding to [sockaddr]. [hostname] is the
     registered domain name represented by [sockaddr]. [service] is the IANA specified textual name of the
     port specified in [sockaddr], e.g. 'ftp', 'http', 'https', etc. *)
@@ -408,6 +410,8 @@ val close : [> `Close] r -> unit
 (** {2 Provider Interface} *)
 
 module Pi : sig
-  val network :
-    (module NETWORK with type t = 'a) -> 'a -> t
+  val network
+    : (module NETWORK with type t = 'a)
+    -> 'a
+    -> ('a * < network : (module NETWORK with type t = 'a) >) t
 end

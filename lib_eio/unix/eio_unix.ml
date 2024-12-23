@@ -31,11 +31,11 @@ module Net = Net
 module Cap = Cap
 
 module Stdenv = struct
-  type base = <
+  type 'net base = <
     stdin  : Eio.Flow.source;
     stdout : Eio.Flow.sink;
     stderr : Eio.Flow.sink;
-    net : Net.t;
+    net : Net.packed;
     domain_mgr : Eio.Domain_manager.t;
     process_mgr : Process.mgr;
     clock : float Eio.Time.clock_ty r;

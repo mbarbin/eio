@@ -16,7 +16,8 @@
 
 module Low_level = Low_level
 
-type stdenv = Eio_unix.Stdenv.base
+type stdenv = 'net Eio_unix.Stdenv.base
+  constraint 'net = int
 
 let run main =
   (* SIGPIPE makes no sense in a modern application. *)
@@ -25,6 +26,7 @@ let run main =
   let stdin = (Flow.of_fd Eio_unix.Fd.stdin |> Eio_unix.Flow.Cast.as_source) in
   let stdout = (Flow.of_fd Eio_unix.Fd.stdout |> Eio_unix.Flow.Cast.as_sink) in
   let stderr = (Flow.of_fd Eio_unix.Fd.stderr |> Eio_unix.Flow.Cast.as_sink) in
+  let net = Net.v () in
   Domain_mgr.run_event_loop main @@ object (_ : stdenv)
     method stdin = stdin
     method stdout = stdout
@@ -32,7 +34,7 @@ let run main =
     method debug = Eio.Private.Debug.v
     method clock = Time.clock
     method mono_clock = Time.mono_clock
-    method net = Net.v
+    method net = net
     method process_mgr = Process.mgr
     method domain_mgr = Domain_mgr.v
     method cwd = (Eio.Path.Path (Fs.cwd, "") :> Eio.Path.t)

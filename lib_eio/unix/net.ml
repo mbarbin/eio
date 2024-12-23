@@ -73,22 +73,19 @@ module type S = sig
   val getnameinfo : t -> Eio.Net.Sockaddr.t -> (string * string)
 end
 
-type t =
-    Network :
+type 'r t =
+  | Network :
       ('a *
-       < network : (module S with type t = 'a)
-       ; ..
-         >)
-      -> t [@@unboxed]
+       < network : (module Eio.Net.NETWORK with type t = 'a)
+       ; network_unix : (module S with type t = 'a)
+       ; ..> as 'r)
+      -> 'r t [@@unboxed]
 
 (* CR mbarbin: This is temporary code that I use to be able to compile
    some code that currently does not make use of [Eio_unix] specific
    functionality. I would like to spend more time thinking about this
    once I know more. *)
-module To_generic = struct
-  let project (Network (a, ops)) =
-    let module X = (val ops#network) in
-    let module G = struct
+module To_generic (X : S) : Eio.Net.NETWORK with type t = X.t = struct
       include X
 
       let listen t ~reuse_addr ~reuse_port ~backlog ~sw stream =
@@ -102,24 +99,24 @@ module To_generic = struct
       let datagram_socket t ~reuse_addr ~reuse_port ~sw addr =
         let datagram_socket = X.datagram_socket t ~reuse_addr ~reuse_port ~sw addr in
         Datagram_socket.Cast.as_generic datagram_socket
-    end in
-    Eio.Net.Pi.network (module G) a
-end
+    end
 
-let to_generic = To_generic.project
+module Cast = struct
+  let as_generic (Network t) = Eio.Net.Network t
+end
 
 let accept ~sw (Listening_socket.T (t, ops)) =
   let module X = (val ops#unix_listening_socket) in
   X.accept t ~sw
 
-let listen ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : t) =
+let listen (type a) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : a t) =
   let (Network (t, ops)) = t in
-  let module X = (val ops#network) in
+  let module X = (val ops#network_unix) in
   X.listen t ~reuse_addr ~reuse_port ~backlog ~sw
 
-let connect ~sw (t : t) addr =
+let connect (type a) ~sw (t : a t) addr =
   let (Network (t, ops)) = t in
-  let module X = (val ops#network) in
+  let module X = (val ops#network_unix) in
   try X.connect t ~sw addr
   with Eio.Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
@@ -127,7 +124,11 @@ let connect ~sw (t : t) addr =
 
 module Pi = struct
   let make (type a) (module X : S with type t = a) (t : a) =
-    Network (t, object method network = (module X : S with type t = a) end)
+    let module G = To_generic (X) in
+    Network (t, object
+      method network = (module G : Eio.Net.NETWORK with type t = a)
+      method network_unix = (module X : S with type t = a)
+    end)
 end
 
 [@@@alert "-unstable"]

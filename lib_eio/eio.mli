@@ -234,7 +234,7 @@ module Stdenv : sig
       To use this, see {!Net}.
   *)
 
-  val net : <net : 'net; ..> -> 'net
+  val net : <net : _ Net.t as 'net; ..> -> 'net
   (** [net t] gives access to the process's network namespace. *)
 
   (** {1 Processes }

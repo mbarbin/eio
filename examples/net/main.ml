@@ -17,4 +17,4 @@ let main ~net =
 
 let () =
   Eio_main.run @@ fun env ->
-  main ~net:(Eio.Stdenv.net env |> Eio_unix.Net.to_generic)
+  main ~net:(Eio.Stdenv.net env |> Eio_unix.Net.Cast.as_generic)

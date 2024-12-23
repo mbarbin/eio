@@ -29,15 +29,22 @@ module type S = sig
   val getnameinfo : t -> Eio.Net.Sockaddr.t -> (string * string)
 end
 
-type t =
+type 'r t =
   | Network :
       ('a *
-       < network : (module S with type t = 'a)
-       ; ..
-         >)
-      -> t [@@unboxed]
+       < network : (module Eio.Net.NETWORK with type t = 'a)
+       ; network_unix : (module S with type t = 'a)
+       ; .. > as 'r)
+      -> 'r t [@@unboxed]
 
-val to_generic : t -> Eio.Net.t
+module Cast : sig
+  val as_generic :
+    ('a *
+      (< network : (module Eio.Net.NETWORK with type t = 'a)
+       ; network_unix : (module S with type t = 'a)
+       ; .. > as 'b)) t
+    -> ('a * 'b) Eio.Net.t
+end
 
 val accept :
   sw:Switch.t ->
@@ -46,12 +53,16 @@ val accept :
 
 val listen :
   ?reuse_addr:bool -> ?reuse_port:bool -> backlog:int -> sw:Switch.t ->
-  t -> Eio.Net.Sockaddr.stream -> Listening_socket.t
+ _ t -> Eio.Net.Sockaddr.stream -> Listening_socket.t
 
-val connect : sw:Switch.t -> t -> Eio.Net.Sockaddr.stream -> Stream_socket.t
+val connect : sw:Switch.t -> _ t -> Eio.Net.Sockaddr.stream -> Stream_socket.t
 
 module Pi : sig
-  val make : (module S with type t = 'a) -> 'a -> t
+  val make : (module S with type t = 'a) -> 'a ->
+  ('a *
+  (< network : (module Eio.Net.NETWORK with type t = 'a)
+   ; network_unix : (module S with type t = 'a)
+   >)) t
 end
 
 (** {2 Passing file descriptors} *)

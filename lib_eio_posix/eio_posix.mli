@@ -1,6 +1,8 @@
 (** Fallback Eio backend for POSIX systems. *)
 
-type stdenv = Eio_unix.Stdenv.base
+type stdenv = 'net Eio_unix.Stdenv.base
+  constraint 'net = int
+
 (** The type of the standard set of resources available on POSIX systems. *)
 
 val run : (stdenv -> 'a) -> 'a

@@ -301,12 +301,14 @@ module type NETWORK = sig
   val getnameinfo : t -> Sockaddr.t -> (string * string)
 end
 
-type t =
+type 'r t =
     Network :
       ('a *
        < network : (module NETWORK with type t = 'a)
-       ; ..>)
-      -> t [@@unboxed]
+       ; ..> as 'r)
+      -> 'r t [@@unboxed]
+
+type packed = Net : 'r t -> packed
 
 module Pi = struct
   let network (type t) (module X : NETWORK with type t = t) (t : t) =
@@ -349,12 +351,12 @@ let recv (Datagram_socket.T (t, ops)) buf =
   let module X = (val ops#datagram_socket) in
   X.recv t buf
 
-let listen ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : t) =
+let listen (type a) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t : a t) =
   let (Network (t, ops)) = t in
   let module X = (val ops#network) in
   X.listen t ~reuse_addr ~reuse_port ~backlog ~sw
 
-let connect ~sw (t : t) addr =
+let connect (type a) ~sw (t : a t) addr =
   let (Network (t, ops)) = t in
   let module X = (val ops#network) in
   try X.connect t ~sw addr
@@ -362,13 +364,13 @@ let connect ~sw (t : t) addr =
     let bt = Printexc.get_raw_backtrace () in
     Exn.reraise_with_context ex bt "connecting to %a" Sockaddr.pp addr
 
-let datagram_socket ?(reuse_addr=false) ?(reuse_port=false) ~sw (t : t) addr =
+let datagram_socket (type a) ?(reuse_addr=false) ?(reuse_port=false) ~sw (t : a t) addr =
   let (Network (t, ops)) = t in
   let module X = (val ops#network) in
   let addr = (addr :> [Sockaddr.datagram | `UdpV4 | `UdpV6]) in
   X.datagram_socket t ~reuse_addr ~reuse_port ~sw addr
 
-let getaddrinfo ?(service="") (t : t) hostname =
+let getaddrinfo (type a) ?(service="") (t : a t) hostname =
   let (Network (t, ops)) = t in
   let module X = (val ops#network) in
   X.getaddrinfo t ~service hostname
@@ -387,7 +389,7 @@ let getaddrinfo_datagram ?service t hostname =
       | _ -> None
     )
 
-let getnameinfo (t : t) sockaddr =
+let getnameinfo (type a) (t : a t) sockaddr =
   let (Network (t, ops)) = t in
   let module X = (val ops#network) in
   X.getnameinfo t sockaddr

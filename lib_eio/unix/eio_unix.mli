@@ -54,11 +54,11 @@ module Cap = Cap
 
 (** The set of resources provided to a process on a Unix-compatible system. *)
 module Stdenv : sig
-  type base = <
+  type 'net base = <
     stdin  : Eio.Flow.source;
     stdout : Eio.Flow.sink;
     stderr : Eio.Flow.sink;
-    net : Net.t;
+    net : 'net Net.t;
     domain_mgr : Eio.Domain_manager.t;
     process_mgr : Process.mgr;
     clock : float Eio.Time.clock_ty r;
