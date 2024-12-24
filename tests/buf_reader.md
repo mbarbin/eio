@@ -244,7 +244,7 @@ Exception: End_of_file.
 
 ```ocaml
 # let bflow = R.of_flow mock_flow ~max_size:100 |> R.as_flow;;
-val bflow : Eio.Flow.source = Eio__.Flow.Source.T (<poly>, <obj>)
+val bflow : R.as_flow Eio__.Flow.Source.t' = (<abstr>, <obj>)
 # next := ["foo"; "bar"]; read bflow 2;;
 +mock_flow returning 3 bytes
 +Read "fo"
@@ -677,7 +677,7 @@ Exception: Failure "Unexpected data after parsing (at offset 4)".
     `Return "r\n";
     `Raise End_of_file;
   ];
-  R.parse_exn ~max_size:100 R.(line <*> line) (Eio_mock.Flow.Cast.as_source flow);;
+  R.parse_exn ~max_size:100 R.(line <*> line) flow;;
 +flow: read "foo\n"
 +           "ba"
 +flow: read "r\n"

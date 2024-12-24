@@ -70,7 +70,9 @@ val of_buffer : Cstruct.buffer -> t
 val of_string : string -> t
 (** [of_string s] is a reader that reads from [s]. *)
 
-val as_flow : t -> Flow.Source.r
+type as_flow
+
+val as_flow : t -> as_flow Flow.Source.t'
 (** [as_flow t] is a buffered flow.
 
     Reading from it will return data from the buffer,

@@ -120,9 +120,11 @@ module Buffer_sink = struct
   let copy t ~src = simple_copy ~single_write t ~src
 end
 
+type buffer_sink = Buffer_sink.t
+
 let buffer_sink =
   let ops = Sink.make (module Buffer_sink) in
-  fun b -> Sink.T (ops b)
+  fun b -> ops b
 
 module Source = Source
 

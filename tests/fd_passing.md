@@ -71,12 +71,14 @@ Using named sockets:
 
 ```ocaml
 # run ~clear:["tmp-foo.txt"] @@ fun env ->
-  let net = env#net in
+  let (Eio_unix.Net.T net) = env#net in
   with_tmp_file env#cwd "foo" @@ fun fd ->
   Switch.run @@ fun sw ->
   let addr = `Unix "test.socket" in
-  let server = Eio_unix.Net.listen ~sw net ~reuse_addr:true ~backlog:1 addr in
-  let r, w = Fiber.pair
+  let (Eio_unix.Net.Listening_socket.T server) =
+    Eio_unix.Net.listen ~sw net ~reuse_addr:true ~backlog:1 addr
+  in
+  let (Eio_unix.Net.Stream_socket.T r, Eio_unix.Net.Stream_socket.T w) = Fiber.pair
     (fun () -> Eio_unix.Net.connect ~sw net addr)
     (fun () -> fst (Eio_unix.Net.accept ~sw server))
   in

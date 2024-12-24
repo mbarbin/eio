@@ -28,6 +28,14 @@ type r = T : 'a t' -> r
 
 val make : (module S with type t = 'a) -> 'a -> 'a t'
 
+val wrap : ('a *
+   (< shutdown : (module Flow.SHUTDOWN with type t = 'a)
+    ; source : (module Flow.SOURCE with type t = 'a)
+    ; sink : (module Flow.SINK with type t = 'a)
+    ; close : 'a -> unit
+    ; resource_store : 'a Resource_store.t
+    ; .. >)) -> r
+
 val find_store : _ t -> 'b Resource_store.accessor -> 'b option
 
 val close : _ t -> unit

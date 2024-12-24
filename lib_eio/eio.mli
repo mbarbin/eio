@@ -234,7 +234,7 @@ module Stdenv : sig
       To use this, see {!Net}.
   *)
 
-  val net : <net : Net.r as 'a; ..> -> 'a
+  val net : <net : _ as 'a; ..> -> 'a
   (** [net t] gives access to the process's network namespace. *)
 
   (** {1 Processes }
@@ -242,7 +242,7 @@ module Stdenv : sig
       To use this, see {!Process}.
   *)
 
-  val process_mgr : <process_mgr : Process.mgr_r as 'a; ..> -> 'a
+  val process_mgr : <process_mgr : _ as 'a; ..> -> 'a
   (** [process_mgr t] allows you to manage child processes. *)
 
   (** {1 Domains (using multiple CPU cores)}

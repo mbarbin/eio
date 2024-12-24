@@ -713,7 +713,7 @@ We can get the Unix FD from the flow and use it directly:
 ```ocaml
 # run @@ fun env ->
   let fs = Eio.Stdenv.fs env in
-  Path.with_open_in (fs / Filename.null) (fun flow ->
+  Path.with_open_in (fs / Filename.null) (fun (Eio.File.Ro.T flow) ->
      match Eio.File.Ro.find_store flow Eio_unix.Fd.key with
      | None -> failwith "No Unix file descriptor!"
      | Some fd ->
@@ -731,7 +731,7 @@ case, `with_open_in` will no longer close it on exit:
 ```ocaml
 # run @@ fun env ->
   let fs = Eio.Stdenv.fs env in
-  let fd = Path.with_open_in (fs / Filename.null) (fun flow ->
+  let fd = Path.with_open_in (fs / Filename.null) (fun (Eio.File.Ro.T flow) ->
     Option.get (Eio_unix.Fd.remove (Option.get (Eio.File.Ro.find_store flow Eio_unix.Fd.key)))
   ) in
   let got = Unix.read fd (Bytes.create 10) 0 10 in
@@ -874,12 +874,12 @@ Check reading and writing vectors at arbitrary offsets:
 # run ~clear:["test.txt"] @@ fun env ->
   let cwd = Eio.Stdenv.cwd env in
   let path = cwd / "test.txt" in
-  Path.with_open_out path ~create:(`Exclusive 0o600) @@ fun file ->
-  Eio.Flow.copy_string "+-!" (Eio.File.Rw.to_sink file);
+  Path.with_open_out path ~create:(`Exclusive 0o600) @@ fun (Eio.File.Rw.T file) ->
+  Eio.Flow.copy_string "+-!" file;
   Eio.File.pwrite_all file ~file_offset:(Int63.of_int 2) Cstruct.[of_string "abc"; of_string "123"];
   let buf1 = Cstruct.create 3 in
   let buf2 = Cstruct.create 4 in
-  Eio.File.pread_exact (Eio.File.Rw.to_ro file) ~file_offset:(Int63.of_int 1) [buf1; buf2];
+  Eio.File.pread_exact file ~file_offset:(Int63.of_int 1) [buf1; buf2];
   traceln" %S/%S" (Cstruct.to_string buf1) (Cstruct.to_string buf2);;
 + "-ab"/"c123"
 - : unit = ()
@@ -891,9 +891,8 @@ Reading at the end of a file:
 # run @@ fun env ->
   let cwd = Eio.Stdenv.cwd env in
   let path = cwd / "test.txt" in
-  Path.with_open_out path ~create:(`Or_truncate 0o600) @@ fun file ->
-  Eio.Flow.copy_string "abc" (Eio.File.Rw.to_sink file);
-  let file = Eio.File.Rw.to_ro file in
+  Path.with_open_out path ~create:(`Or_truncate 0o600) @@ fun (Eio.File.Rw.T file) ->
+  Eio.Flow.copy_string "abc" file;
   let buf = Cstruct.create 10 in
   let got = Eio.File.pread file [buf] ~file_offset:(Int63.of_int 0) in
   traceln "Read %S" (Cstruct.to_string buf ~len:got);
@@ -913,8 +912,7 @@ Ensure reads can be cancelled promptly, even if there is no need to wait:
 
 ```ocaml
 # run @@ fun env ->
-  Eio.Path.with_open_out (env#fs / "/dev/zero") ~create:`Never @@ fun null ->
-  let null = Eio.File.Rw.to_source null in
+  Eio.Path.with_open_out (env#fs / "/dev/zero") ~create:`Never @@ fun (Eio.File.Rw.T null) ->
   Fiber.both
      (fun () ->
         let buf = Cstruct.create 4 in
@@ -973,15 +971,15 @@ Exception: Failure "Simulated error".
 
 ```ocaml
 # run @@ fun env ->
-  Eio.Path.with_open_out (env#cwd / "seek-test") ~create:(`If_missing 0o700) @@ fun file ->
+  Eio.Path.with_open_out (env#cwd / "seek-test") ~create:(`If_missing 0o700)
+  @@ fun (Eio.File.Rw.T file) ->
   Eio.File.truncate file (Int63.of_int 10);
-  let file_r = Eio.File.Rw.to_ro file in
-  assert ((Eio.File.stat file_r).size = (Int63.of_int 10));
-  let pos = Eio.File.seek file_r (Int63.of_int 3) `Set in
+  assert ((Eio.File.stat file).size = (Int63.of_int 10));
+  let pos = Eio.File.seek file (Int63.of_int 3) `Set in
   traceln "seek from start: %a" Int63.pp pos;
-  let pos = Eio.File.seek file_r (Int63.of_int 2) `Cur in
+  let pos = Eio.File.seek file (Int63.of_int 2) `Cur in
   traceln "relative seek: %a" Int63.pp pos;
-  let pos = Eio.File.seek file_r (Int63.of_int (-1)) `End in
+  let pos = Eio.File.seek file (Int63.of_int (-1)) `End in
   traceln "seek from end: %a" Int63.pp pos;
   Eio.File.sync file;    (* (no way to check if this actually worked, but ensure it runs) *)
 +seek from start: 3

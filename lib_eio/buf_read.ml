@@ -146,8 +146,9 @@ module F = struct
   let read_methods = [Flow.Read_source_buffer rsb]
 end
 
-let as_flow t =
-  Flow.Source.T (Flow.Source.make (module F) t)
+type as_flow = t
+
+let as_flow t = Flow.Source.make (module F) t
 
 let get t i =
   Bigarray.Array1.get t.buf (t.pos + i)

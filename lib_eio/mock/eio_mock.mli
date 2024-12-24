@@ -182,18 +182,22 @@ module Net : sig
     type 'a t' = ('a, 'a listening_socket) t
 
     type r = T : 'a t' -> r
+
+    module Cast : sig
+      val as_generic : r -> Eio.Net.Listening_socket.r
+    end
   end
 
   val make : string -> Impl.t t'
   (** [make label] is a new mock network. *)
 
-  val on_connect : _ t -> Eio.Net.Stream_socket.r Handler.actions -> unit
+  val on_connect : _ t -> _ Eio.Net.Stream_socket.t Handler.actions -> unit
   (** [on_connect t actions] configures what to do when a client tries to connect somewhere. *)
 
-  val on_listen : _ t -> Eio.Net.Listening_socket.r Handler.actions -> unit
+  val on_listen : _ t -> _ Eio.Net.Listening_socket.t Handler.actions -> unit
   (** [on_listen t actions] configures what to do when a server starts listening for incoming connections. *)
 
-  val on_datagram_socket : _ t -> Eio.Net.Datagram_socket.r Handler.actions -> unit
+  val on_datagram_socket : _ t -> _ Eio.Net.Datagram_socket.t Handler.actions -> unit
   (** [on_datagram_socket t actions] configures how to create datagram sockets. *)
 
   val on_getaddrinfo : _ t -> Eio.Net.Sockaddr.t list Handler.actions -> unit
@@ -201,14 +205,15 @@ module Net : sig
   val on_getnameinfo : _ t -> (string * string) Handler.actions -> unit
 
   val listening_socket :
-    ?listening_addr:Eio.Net.Sockaddr.stream -> string -> Listening_socket.r
+    ?listening_addr:Eio.Net.Sockaddr.stream -> string
+    -> Listening_socket_impl.t Listening_socket.t'
   (** [listening_socket label] can be configured to provide mock connections.
 
       If [listening_addr] is not provided, a dummy value will be reported. *)
 
   val on_accept :
     _ Listening_socket.t ->
-    (Flow.r * Eio.Net.Sockaddr.stream) Handler.actions ->
+    (_ Flow.t * Eio.Net.Sockaddr.stream) Handler.actions ->
     unit
   (** [on_accept socket actions] configures how to respond when the server calls "accept". *)
 

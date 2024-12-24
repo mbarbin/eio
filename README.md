@@ -167,8 +167,7 @@ For example, instead of giving `main` the real standard output, we can have it w
 ```ocaml
 # Eio_main.run @@ fun _env ->
   let buffer = Buffer.create 20 in
-  let (Eio.Flow.Sink.T sink) = (Eio.Flow.buffer_sink buffer) in
-  main sink;
+  main (Eio.Flow.buffer_sink buffer);
   traceln "Main would print %S" (Buffer.contents buffer);;
 +Main would print "Hello, world!\n"
 - : unit = ()
@@ -406,7 +405,7 @@ This can also be tested on its own using a mock network:
 # Eio_mock.Backend.run @@ fun () ->
   let net = Eio_mock.Net.make "mocknet" in
   let flow = Eio_mock.Flow.make "flow" in
-  Eio_mock.Net.on_connect net [`Return (Eio_mock.Flow.Cast.as_stream_socket (T flow))];
+  Eio_mock.Net.on_connect net [`Return flow];
   Eio_mock.Flow.on_read flow [
     `Return "(packet 1)";
     `Yield_then (`Return "(packet 2)");
@@ -427,7 +426,7 @@ This can also be tested on its own using a mock network:
 
 ```ocaml
 let run_server socket =
-  Eio.Net.run_server socket handle_client
+  Eio.Net.run_server socket { connection_handler = handle_client }
     ~on_error:(traceln "Error handling connection: %a" Fmt.exn)
 ```
 
@@ -436,9 +435,11 @@ Note: when `handle_client` finishes, `run_server` closes the flow automatically.
 We can now run the client and server together using the real network (in a single process):
 
 ```ocaml
-let main ~net ~addr =
+let main ~net:(Eio_unix.Net.T net) ~addr =
   Switch.run ~name:"main" @@ fun sw ->
-  let server = Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr in
+  let (Eio.Net.Listening_socket.T server) =
+    Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr
+  in
   Fiber.fork_daemon ~sw (fun () -> run_server server);
   run_client ~net ~addr
 ```
@@ -450,7 +451,7 @@ the test would never finish.
 ```ocaml
 # Eio_main.run @@ fun env ->
   main
-    ~net:(Eio.Stdenv.net env |> Eio_unix.Net.to_generic)
+    ~net:(Eio.Stdenv.net env)
     ~addr:(`Tcp (Eio.Net.Ipaddr.V4.loopback, 8080));;
 +Client: connecting to server
 +Server: got connection from client
@@ -528,9 +529,10 @@ Let's try it with some test data (you could use the real stdin if you prefer):
 
 ```ocaml
 # Eio_main.run @@ fun env ->
+  let (Eio.Flow.Sink.T stdout) = Eio.Stdenv.stdout env in
   cli
     ~stdin:(Eio.Flow.string_source "help\nexit\nquit\nbye\nstop\n")
-    ~stdout:(Eio.Stdenv.stdout env);;
+    ~stdout;;
 +> help
 It's just an example
 +> exit
@@ -596,7 +598,7 @@ let send_response socket =
 
 ```ocaml
 # Eio_main.run @@ fun _ ->
-  send_response (Eio_mock.Flow.make "socket" |> Eio_mock.Flow.Cast.as_sink);;
+  send_response (Eio_mock.Flow.make "socket");;
 +socket: wrote "HTTP/1.1 200 OK\r\n"
 +socket: wrote "\r\n"
 +socket: wrote "Body data"
@@ -619,7 +621,7 @@ let send_response socket =
 
 ```ocaml
 # Eio_main.run @@ fun _ ->
-  send_response (Eio_mock.Flow.make "socket" |> Eio_mock.Flow.Cast.as_flow);;
+  send_response (Eio_mock.Flow.make "socket");;
 +socket: wrote "HTTP/1.1 200 OK\r\n"
 +              "\r\n"
 +socket: wrote "Body data"
@@ -673,7 +675,7 @@ and then extended again by our `get` function with the full URL:
   let net = Eio_mock.Net.make "mocknet" in
   Eio_mock.Net.on_getaddrinfo net [`Return [`Tcp (Eio.Net.Ipaddr.V4.loopback, 80)]];
   Eio_mock.Net.on_connect net [`Raise (Eio.Net.err (Connection_failure Timeout))];
-  get ~net:(Eio_mock.Net.Cast.as_generic net) ~host:"example.com" ~path:"index.html";;
+  get ~net ~host:"example.com" ~path:"index.html";;
 +mocknet: getaddrinfo ~service:http example.com
 +mocknet: connect to tcp:127.0.0.1:80
 Exception:
@@ -708,7 +710,7 @@ To avoid this problem, you can use `Eio.Exn.Backend.show` to hide the backend-sp
 - : unit = ()
 
 # Eio_main.run @@ fun env ->
-  let net = Eio.Stdenv.net env |> Eio_unix.Net.to_generic in
+  let (Eio_unix.Net.T net) = Eio.Stdenv.net env in
   Switch.run @@ fun sw ->
   Eio.Net.connect ~sw net (`Tcp (Eio.Net.Ipaddr.V4.loopback, 1234));;
 Exception:
@@ -862,7 +864,7 @@ Spawning a child process can be done using the [Eio.Process][] module:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
+  let (Eio_unix.Process.Mgr proc_mgr) = Eio.Stdenv.process_mgr env in
   Eio.Process.run proc_mgr ["echo"; "hello"];;
 hello
 - : unit = ()
@@ -873,10 +875,9 @@ For example, we can use `tr` to convert some text to upper-case:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
-  let (Eio.Source.T src) = (Eio.Flow.string_source "One two three\n") in
+  let (Eio_unix.Process.Mgr proc_mgr) = Eio.Stdenv.process_mgr env in
   Eio.Process.run proc_mgr ["tr"; "a-z"; "A-Z"]
-    ~stdin:src;;
+    ~stdin:(Eio.Flow.string_source "One two three\n");;
 ONE TWO THREE
 - : unit = ()
 ```
@@ -886,7 +887,7 @@ or use the `parse_out` convenience wrapper:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
+  let (Eio_unix.Process.Mgr proc_mgr) = Eio.Stdenv.process_mgr env in
   Eio.Process.parse_out proc_mgr Eio.Buf_read.line ["echo"; "hello"];;
 - : string = "hello"
 ```
@@ -895,7 +896,7 @@ All process functions either return the exit status or check that it was zero (s
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env |> Eio_unix.Process.Mgr.as_generic in
+  let (Eio_unix.Process.Mgr proc_mgr) = Eio.Stdenv.process_mgr env in
   Eio.Process.parse_out proc_mgr Eio.Buf_read.take_all ["sh"; "-c"; "exit 3"];;
 Exception:
 Eio.Io Process Child_error Exited (code 3),
@@ -1807,13 +1808,14 @@ If you want to store the argument, this may require you to cast internally:
 ```ocaml
 module Foo : sig
   type t
-  val of_source : Eio.Flow.source -> t
+  val of_source : _ Eio.Flow.Source.t -> t
 end = struct
   type t = {
-    src : Eio.Flow.source;
+    src : Eio.Flow.Source.r;
   }
 
-  let of_source src = { src }
+  let of_source (type a) (src : (a, _) Eio.Flow.Source.t) =
+    { src = Eio.Flow.Source.T (src :> a Eio.Flow.Source.t') }
 end
 ```
 

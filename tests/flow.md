@@ -75,7 +75,7 @@ Copying from a string src:
   let src = Eio.Flow.string_source "foobar" in
   let dst = Eio_mock.Flow.make "dst" in
   Eio_mock.Flow.on_copy_bytes dst [`Return 3; `Return 5];
-  Eio.Flow.copy src (Eio_mock.Flow.Cast.as_sink dst);;
+  Eio.Flow.copy src dst;;
 +dst: wrote "foo"
 +dst: wrote "bar"
 - : unit = ()
@@ -88,7 +88,7 @@ Copying from src using a plain buffer (the default):
   let src = Eio.Flow.cstruct_source [Cstruct.of_string "foobar"] in
   let dst = Eio_mock.Flow.make "dst" in
   Eio_mock.Flow.on_copy_bytes dst [`Return 3; `Return 5];
-  Eio.Flow.copy src (Eio_mock.Flow.Cast.as_sink dst);;
+  Eio.Flow.copy src dst;;
 +dst: wrote "foo"
 +dst: wrote "bar"
 - : unit = ()
@@ -102,7 +102,7 @@ Copying from src using `Read_source_buffer`:
   let dst = Eio_mock.Flow.make "dst" in
   Eio_mock.Flow.set_copy_method dst `Read_source_buffer;
   Eio_mock.Flow.on_copy_bytes dst [`Return 3; `Return 5];
-  Eio.Flow.copy src (Eio_mock.Flow.Cast.as_sink dst);;
+  Eio.Flow.copy src dst;;
 +dst: wrote (rsb) ["foo"]
 +dst: wrote (rsb) ["bar"]
 - : unit = ()
@@ -130,7 +130,7 @@ Copying from src using `Read_source_buffer`:
 # run @@ fun () ->
   let dst = Eio_mock.Flow.make "dst" in
   Eio_mock.Flow.on_copy_bytes dst [`Return 6];
-  Eio.Flow.write (Eio_mock.Flow.Cast.as_sink dst) [Cstruct.of_string "foobar"];;
+  Eio.Flow.write dst [Cstruct.of_string "foobar"];;
 +dst: wrote "foobar"
 - : unit = ()
 ```
@@ -142,17 +142,17 @@ Writing to and reading from a pipe.
 ```ocaml
 # Eio_main.run @@ fun env ->
   Switch.run @@ fun sw ->
-  let r, w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
   let msg = "Hello, world" in
   Eio.Fiber.both
     (fun () ->
       let buf = Cstruct.create (String.length msg) in
-      let () = Eio.Flow.read_exact (Eio_unix.Source.Cast.as_generic r) buf in
+      let () = Eio.Flow.read_exact r buf in
       traceln "Got: %s" (Cstruct.to_string buf)
     )
     (fun () ->
-      Eio.Flow.copy_string msg (Eio_unix.Sink.Cast.as_generic w);
-      Eio_unix.Sink.close w
+      Eio.Flow.copy_string msg w;
+      Eio.Flow.close w
     );;
 +Got: Hello, world
 - : unit = ()
@@ -163,10 +163,10 @@ Make sure we don't crash on SIGPIPE:
 ```ocaml
 # Eio_main.run @@ fun env ->
   Switch.run @@ fun sw ->
-  let r, w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
   Eio_unix.Source.close r;
   try
-    Eio.Flow.copy_string "Test" (Eio_unix.Sink.Cast.as_generic w);
+    Eio.Flow.copy_string "Test" w;
     assert false
   with Eio.Io (Eio.Net.E Connection_reset _, _) ->
     traceln "Connection_reset (good)";;
@@ -181,16 +181,16 @@ Sending a very long vector over a flow should just send it in chunks, not fail:
 ```ocaml
 # Eio_main.run @@ fun env ->
   Switch.run @@ fun sw ->
-  let r, w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
   let a = Cstruct.of_string "abc" in
   let vecs = List.init 10_000 (Fun.const a) in
   Fiber.both
     (fun () ->
-       Eio.Flow.write (Eio_unix.Sink.Cast.as_generic w) vecs;
-       Eio_unix.Sink.close w
+       Eio.Flow.write w vecs;
+       Eio.Flow.close w
     )
     (fun () ->
-       let got = Eio.Flow.read_all (Eio_unix.Source.Cast.as_generic r) in
+       let got = Eio.Flow.read_all r in
        traceln "Read %d bytes" (String.length got);
        assert (got = Cstruct.to_string (Cstruct.concat vecs))
     )
@@ -205,17 +205,17 @@ Even if a fiber is already ready to run, we still perform IO from time to time:
 ```ocaml
 # run @@ fun _ ->
   Switch.run @@ fun sw ->
-  let r, w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
   let rec spin () = Fiber.yield (); spin () in
   Fiber.fork_daemon ~sw spin;
   Fiber.both
     (fun () ->
        let buf = Cstruct.create 3 in
-       Eio.Flow.read_exact (Eio_unix.Source.Cast.as_generic r) buf;
+       Eio.Flow.read_exact r buf;
        traceln "Got %S" (Cstruct.to_string buf)
     )
     (fun () ->
-       Eio.Flow.write (Eio_unix.Sink.Cast.as_generic w) [Cstruct.of_string "msg"]
+       Eio.Flow.write w [Cstruct.of_string "msg"]
     )
 +Got "msg"
 - : unit = ()

@@ -60,8 +60,7 @@ let test_copy () =
   let buffer = Buffer.create 20 in
   Fiber.both
     (fun () ->
-      let (Eio.Flow.Sink.T sink) = Eio.Flow.buffer_sink buffer in
-      Eio.Flow.copy from_pipe sink)
+      Eio.Flow.copy from_pipe (Eio.Flow.buffer_sink buffer))
     (fun () ->
       for _ = 1 to 2 do
         Eio.Flow.copy (Eio.Flow.string_source msg) to_pipe;
@@ -79,7 +78,6 @@ let test_direct_copy () =
   let (Eio_unix.Source.T from_pipe1, Eio_unix.Sink.T to_pipe1) = Eio_unix.pipe sw in
   let (Eio_unix.Source.T from_pipe2, Eio_unix.Sink.T to_pipe2) = Eio_unix.pipe sw in
   let buffer = Buffer.create 20 in
-  let (Eio.Flow.Sink.T to_output) = Eio.Flow.buffer_sink buffer in
   Switch.run (fun sw ->
       Fiber.fork ~sw (fun () ->
         Trace.log "copy1";
@@ -87,7 +85,7 @@ let test_direct_copy () =
         Eio.Flow.close to_pipe2);
       Fiber.fork ~sw (fun () ->
         Trace.log "copy2";
-        Eio.Flow.copy from_pipe2 to_output);
+        Eio.Flow.copy from_pipe2 (Eio.Flow.buffer_sink buffer));
       Eio.Flow.copy (Eio.Flow.string_source msg) to_pipe1;
       Eio_unix.Sink.close to_pipe1;
     );

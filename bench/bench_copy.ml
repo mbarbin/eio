@@ -40,7 +40,7 @@ let run _env =
     time "default" (fun (Eio_unix.Net.Stream_socket.T sock) ->
       Eio.Flow.copy sock sock);
     time "buf_read" (fun (Eio_unix.Net.Stream_socket.T sock) ->
-        let (Eio.Flow.Source.T r) =
+        let r =
           Eio.Buf_read.of_flow sock
             ~initial_size:(64 * 1024) ~max_size:(64 * 1024)
           |> Eio.Buf_read.as_flow

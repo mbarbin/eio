@@ -263,8 +263,7 @@ module Slow_writer = struct
     with End_of_file -> ()
 
   let single_write t bufs =
-    let (Eio.Flow.Source.T src) = Eio.Flow.cstruct_source bufs in
-    copy t ~src;
+    copy t ~src:(Eio.Flow.cstruct_source bufs);
     Cstruct.lenv bufs
 end
 let slow_writer = Eio.Flow.Sink.make (module Slow_writer) ()

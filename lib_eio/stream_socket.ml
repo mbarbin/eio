@@ -36,6 +36,11 @@ let make (type t) (module X : S with type t = t) (t : t) =
      method resource_store = resource_store
    end)
 
+(* CR mbarbin: Consider whether to have this systematically part of
+   the design rather than inlining at different places. Think of a
+   name potentially better than [wrap]. *)
+let wrap (type a) (t, ops) = T (t, (ops :> a stream_socket))
+
 (* CR mbarbin: Share this method somewhere, it is used consistently in
    this design. *)
 let find_store (type a) ((t, ops) : (a, _) t) { Resource_store. key } =

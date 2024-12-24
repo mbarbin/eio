@@ -19,9 +19,9 @@ let stdout = Eio_mock.Flow.make "stdout"
     `Return "chunk2";
     `Raise End_of_file
   ];
-  Eio.Flow.copy (Eio_mock.Flow.Cast.as_source stdin) (Eio_mock.Flow.Cast.as_sink stdout);
+  Eio.Flow.copy stdin stdout;
   Eio_mock.Flow.close stdin;
-  Eio.Flow.shutdown (Eio_mock.Flow.Cast.as_flow stdout) `Send;;
+  Eio.Flow.shutdown stdout `Send;;
 +stdin: read "chunk1"
 +stdout: wrote "chunk1"
 +stdin: read "chunk2"
@@ -38,12 +38,12 @@ A simple test server:
 ```ocaml
 let echo_server ~net addr =
   Switch.run @@ fun sw ->
-  let socket = Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr in
+  let (Eio.Net.Listening_socket.T socket) =
+    Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr
+  in
   Eio.Net.accept_fork socket ~sw
-  (fun flow _addr ->
-     Eio.Flow.copy
-       (Eio.Net.Stream_socket.Cast.as_source flow)
-       (Eio.Net.Stream_socket.Cast.as_sink flow))
+    { connection_handler = (fun flow _addr ->
+       Eio.Flow.copy flow flow) }
     ~on_error:(traceln "Error handling connection: %a" Fmt.exn);;
 ```
 
@@ -53,13 +53,12 @@ The server handles a connection:
 # Eio_mock.Backend.run @@ fun _ ->
   let net = Eio_mock.Net.make "mocknet" in
   let listening_socket = Eio_mock.Net.listening_socket "tcp/80" in
-  Eio_mock.Net.on_listen net
-    [`Return (Eio_mock.Net.Listening_socket.Cast.as_generic listening_socket)];
+  Eio_mock.Net.on_listen net [`Return listening_socket];
   let connection = Eio_mock.Flow.make "connection" in
   let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 37568) in
   Eio_mock.Net.on_accept listening_socket [`Return (connection, addr)];
   Eio_mock.Flow.on_read connection [`Return "foo"; `Return "bar"];
-  echo_server ~net:(Eio_mock.Net.Cast.as_generic net) (`Tcp (Eio.Net.Ipaddr.V4.loopback, 80));;
+  echo_server ~net (`Tcp (Eio.Net.Ipaddr.V4.loopback, 80));;
 +mocknet: listen on tcp:127.0.0.1:80
 +tcp/80: accepted connection from tcp:127.0.0.1:37568
 +connection: read "foo"

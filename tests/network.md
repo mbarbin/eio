@@ -8,9 +8,9 @@
 ```ocaml
 open Eio.Std
 
-let run (fn : net:Eio.Net.t -> Switch.t -> unit) =
+let run (fn : net:Eio_unix.Net.r -> Switch.t -> unit) =
   Eio_main.run @@ fun env ->
-  let net = Eio.Stdenv.net env |> Eio_unix.Net.to_generic in
+  let net = Eio.Stdenv.net env in
   Switch.run (fn ~net)
 
 let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 8081)
@@ -33,10 +33,10 @@ A simple client:
 ```ocaml
 let run_client ~sw ~net ~addr =
   traceln "Connecting to server...";
-  let flow = Eio.Net.connect ~sw net addr in
-  Eio.Flow.copy_string "Hello from client" (Eio.Net.Stream_socket.Cast.as_sink flow);
-  Eio.Flow.shutdown (Eio.Net.Stream_socket.Cast.as_flow flow) `Send;
-  let msg = read_all (Eio.Net.Stream_socket.Cast.as_source flow) in
+  let (Eio.Net.Stream_socket.T flow) = Eio.Net.connect ~sw net addr in
+  Eio.Flow.copy_string "Hello from client" flow;
+  Eio.Flow.shutdown flow `Send;
+  let msg = read_all flow in
   traceln "Client received: %S" msg
 ```
 
@@ -45,21 +45,23 @@ A simple server:
 ```ocaml
 let run_server ~sw socket =
   while true do
-    Eio.Net.accept_fork socket ~sw (fun flow _addr ->
+    Eio.Net.accept_fork socket ~sw { connection_handler = (fun flow _addr ->
       traceln "Server accepted connection from client";
       Fun.protect (fun () ->
-        let msg = read_all (Eio.Net.Stream_socket.Cast.as_source flow) in
+        let msg = read_all flow in
         traceln "Server received: %S" msg
-      ) ~finally:(fun () -> Eio.Flow.copy_string "Bye" (Eio.Net.Stream_socket.Cast.as_sink flow))
-    )
+      ) ~finally:(fun () -> Eio.Flow.copy_string "Bye" flow)
+    )}
     ~on_error:(function
       | Graceful_shutdown -> ()
       | ex -> traceln "Error handling connection: %s" (Printexc.to_string ex)
     );
   done
 
-let test_address addr ~net sw =
-  let socket = Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr in
+let test_address addr ~net:(Eio_unix.Net.T net) sw =
+  let (Eio.Net.Listening_socket.T socket) =
+    Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr
+  in
   Fiber.both
     (fun () -> run_server ~sw socket)
     (fun () ->
@@ -123,30 +125,32 @@ Exception: Graceful_shutdown.
 Cancelling the read:
 
 ```ocaml
-# run @@ fun ~net sw ->
+# run @@ fun ~net:(Eio_unix.Net.T net) sw ->
   let shutdown, set_shutdown = Promise.create () in
-  let socket = Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr in
+  let (Eio.Net.Listening_socket.T socket) =
+    Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr
+  in
   Fiber.both
     (fun () ->
-        Eio.Net.accept_fork socket ~sw (fun flow _addr ->
+        Eio.Net.accept_fork socket ~sw { connection_handler = (fun flow _addr ->
           try
             Fiber.both
               (fun () -> raise (Promise.await shutdown))
               (fun () ->
-                let msg = read_all (Eio.Net.Stream_socket.Cast.as_source flow) in
+                let msg = read_all flow in
                 traceln "Server received: %S" msg
               )
           with Graceful_shutdown ->
-            Eio.Flow.copy_string "Request cancelled" (Eio.Net.Stream_socket.Cast.as_sink flow)
-        ) ~on_error:raise
+            Eio.Flow.copy_string "Request cancelled" flow
+        )} ~on_error:raise
     )
     (fun () ->
       traceln "Connecting to server...";
-      let flow = Eio.Net.connect ~sw net addr in
+      let (Eio.Net.Stream_socket.T flow) = Eio.Net.connect ~sw net addr in
       traceln "Connection opened - cancelling server's read";
       Fiber.yield ();
       Promise.resolve set_shutdown Graceful_shutdown;
-      let msg = read_all (Eio.Net.Stream_socket.Cast.as_source flow) in
+      let msg = read_all flow in
       traceln "Client received: %S" msg
     );;
 +Connecting to server...
@@ -158,10 +162,12 @@ Cancelling the read:
 Calling accept when the switch is already off:
 
 ```ocaml
-# run @@ fun ~net sw ->
-  let server = Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr in
+# run @@ fun ~net:(Eio_unix.Net.T net) sw ->
+  let (Eio.Net.Listening_socket.T server) =
+    Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr
+  in
   Switch.fail sw (Failure "Simulated error");
-  Eio.Net.accept_fork server ~sw (fun _flow _addr -> assert false)
+  Eio.Net.accept_fork server ~sw { connection_handler = (fun _flow _addr -> assert false)}
     ~on_error:raise;;
 Exception: Failure "Simulated error".
 ```
@@ -169,10 +175,10 @@ Exception: Failure "Simulated error".
 Working with UDP and endpoints:
 
 ```ocaml
-let run_dgram addr ~net sw =
+let run_dgram addr ~net:(Eio_unix.Net.T net) sw =
   let e1 = `Udp (addr, 8081) in
   let e2 = `Udp (addr, 8082) in
-  let listening_socket = Eio.Net.datagram_socket ~sw net e2 in
+  let (Eio.Net.Datagram_socket.T listening_socket) = Eio.Net.datagram_socket ~sw net e2 in
   Fiber.both
     (fun () ->
       let buf = Cstruct.create 20 in
@@ -183,7 +189,7 @@ let run_dgram addr ~net sw =
       (Cstruct.(to_string (sub buf 0 recv)))
     )
     (fun () ->
-      let e = Eio.Net.datagram_socket ~sw net e1 in
+      let (Eio.Net.Datagram_socket.T e) = Eio.Net.datagram_socket ~sw net e1 in
       traceln "Sending data from %a to %a" Eio.Net.Sockaddr.pp e1 Eio.Net.Sockaddr.pp e2;
       Eio.Net.send e ~dst:e2 [Cstruct.of_string "UDP Message"])
 ```
@@ -212,7 +218,7 @@ Now test host-assigned addresses. `run_dgram2` is like `run_dgram` above, but
 doesn't print the sender address since it will be different in each run:
 
 ```ocaml
-let run_dgram2 ~e1 addr ~net sw =
+let run_dgram2 ~e1 addr ~net:(Eio_unix.Net.T net) sw =
   let server_addr = `Udp (addr, 8082) in
   let listening_socket = Eio.Net.datagram_socket ~sw net server_addr in
   Fiber.both
@@ -253,23 +259,25 @@ Handling one UDP packet using IPv6:
 It's not an error to close the socket before the handler returns:
 
 ```ocaml
-# run @@ fun ~net sw ->
+# run @@ fun ~net:(Eio_unix.Net.T net) sw ->
   let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 8083) in
-  let socket = Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr in
+  let (Eio.Net.Listening_socket.T socket) =
+    Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr
+  in
   Fiber.both
     (fun () ->
-        Eio.Net.accept_fork socket ~sw ~on_error:raise @@ fun flow _addr ->
+        Eio.Net.accept_fork socket ~sw ~on_error:raise { connection_handler = fun flow _addr ->
         traceln "Server got connection";
-        Eio.Flow.copy_string "Hi" (Eio.Net.Stream_socket.Cast.as_sink flow);
-        Eio.Net.Stream_socket.close flow
+        Eio.Flow.copy_string "Hi" flow;
+        Eio.Net.Stream_socket.close flow }
     )
     (fun () ->
       traceln "Connecting to server...";
-      let flow = Eio.Net.connect ~sw net addr in
+      let (Eio.Net.Stream_socket.T flow) = Eio.Net.connect ~sw net addr in
       let msg =
         Eio.Buf_read.(parse_exn take_all)
           ~max_size:100
-          (Eio.Net.Stream_socket.Cast.as_source flow)
+          flow
       in
       traceln "Client got %S" msg;
     );;
@@ -284,18 +292,20 @@ It's not an error to close the socket before the handler returns:
 Extracting file descriptors from Eio objects:
 
 ```ocaml
-# run @@ fun ~net sw ->
-  let socket = Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr in
+# run @@ fun ~net:(Eio_unix.Net.T net) sw ->
+  let (Eio.Net.Listening_socket.T socket) =
+    Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr
+  in
   traceln "Listening socket has Unix FD: %b"
     (Eio.Net.Listening_socket.find_store socket Eio_unix.Fd.key <> None);
   let have_client, have_server =
     Fiber.pair
       (fun () ->
-         let flow = Eio.Net.connect ~sw net addr in
+         let (Eio.Net.Stream_socket.T flow) = Eio.Net.connect ~sw net addr in
          (Eio.Net.Stream_socket.find_store flow Eio_unix.Fd.key <> None)
       )
       (fun () ->
-         let flow, _addr = Eio.Net.accept ~sw socket in
+         let (Eio.Net.Stream_socket.T flow, _addr) = Eio.Net.accept ~sw socket in
          (Eio.Net.Stream_socket.find_store flow Eio_unix.Fd.key <> None)
       )
   in
@@ -367,13 +377,11 @@ Wrapping a Unix FD as an Eio stream socket:
 # Eio_main.run @@ fun _ ->
   Switch.run @@ fun sw ->
   let r, w = Unix.pipe () in
-  let source =
+  let (Eio_unix.Net.Stream_socket.T source) =
     Eio_unix.Net.import_socket_stream ~sw ~close_unix:true r
-    |> Eio_unix.Net.Stream_socket.Cast.as_source
   in
-  let sink =
+  let (Eio_unix.Net.Stream_socket.T sink) =
     Eio_unix.Net.import_socket_stream ~sw ~close_unix:true w
-    |> Eio_unix.Net.Stream_socket.Cast.as_sink
   in
   Fiber.both
     (fun () -> Eio.Flow.copy_string "Hello\n!" sink)
@@ -388,13 +396,15 @@ Wrapping a Unix FD as an Eio stream socket:
 Wrapping a Unix FD as a listening Eio socket:
 
 ```ocaml
-# run @@ fun ~net sw ->
+# run @@ fun ~net:(Eio_unix.Net.T net) sw ->
   let l = Unix.(socket PF_INET SOCK_STREAM 0) in
   Unix.bind l (Unix.ADDR_INET (Unix.inet_addr_loopback, 8082));
   Unix.listen l 40;
-  let l = Eio_unix.Net.import_socket_listening ~sw ~close_unix:true l in
+  let (Eio_unix.Net.Listening_socket.T l) =
+    Eio_unix.Net.import_socket_listening ~sw ~close_unix:true l
+  in
   Fiber.both
-    (fun () -> run_server ~sw (Eio_unix.Net.Listening_socket.Cast.as_generic l))
+    (fun () -> run_server ~sw l)
     (fun () ->
       run_client ~sw ~net ~addr:(`Tcp (Eio.Net.Ipaddr.V4.loopback, 8082));
       traceln "Client finished - cancelling server";
@@ -414,16 +424,14 @@ Wrapping a Unix FD as an datagram Eio socket:
 # Eio_main.run @@ fun _ ->
   Switch.run @@ fun sw ->
   let a, b = Unix.(socketpair PF_UNIX SOCK_DGRAM 0) in
-  let a = Eio_unix.Net.import_socket_datagram ~sw ~close_unix:true a in
-  let b = Eio_unix.Net.import_socket_datagram ~sw ~close_unix:true b in
+  let (Eio_unix.Net.Datagram_socket.T a) = Eio_unix.Net.import_socket_datagram ~sw ~close_unix:true a in
+  let (Eio_unix.Net.Datagram_socket.T b) = Eio_unix.Net.import_socket_datagram ~sw ~close_unix:true b in
   Fiber.both
     (fun () ->
-      Eio.Net.send
-        (Eio_unix.Net.Datagram_socket.Cast.as_generic a)
-        Cstruct.[of_string "12"; of_string "34"])
+      Eio.Net.send a Cstruct.[of_string "12"; of_string "34"])
     (fun () ->
        let buf = Cstruct.create 10 in
-       let addr, len = Eio.Net.recv (Eio_unix.Net.Datagram_socket.Cast.as_generic b) buf in
+       let addr, len = Eio.Net.recv b buf in
        traceln "Got: %S" (Cstruct.to_string buf ~len)
     );;
 +Got: "1234"
@@ -441,8 +449,8 @@ On success, we close the connection immediately:
   let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 1234) in
   Eio_mock.Net.on_accept socket [`Return (flow, addr)];
   Switch.run @@ fun sw ->
-  Eio.Net.accept_fork ~sw ~on_error:raise (Eio_mock.Net.Listening_socket.Cast.as_generic socket)
-    (fun _flow _addr -> ());
+  Eio.Net.accept_fork ~sw ~on_error:raise socket
+    { connection_handler = (fun _flow _addr -> ()) };
   traceln "Mock connection should have been closed by now";;
 +tcp/80: accepted connection from tcp:127.0.0.1:1234
 +connection: closed
@@ -459,9 +467,8 @@ If the forked fiber fails, we close immediately:
   let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 1234) in
   Eio_mock.Net.on_accept socket [`Return (flow, addr)];
   Switch.run @@ fun sw ->
-  Eio.Net.accept_fork ~sw ~on_error:raise
-    (Eio_mock.Net.Listening_socket.Cast.as_generic socket)
-    (fun _flow _addr -> failwith "Simulated error");
+  Eio.Net.accept_fork ~sw ~on_error:raise socket
+    { connection_handler = (fun _flow _addr -> failwith "Simulated error")};
   traceln "Mock connection should have been closed by now";;
 +tcp/80: accepted connection from tcp:127.0.0.1:1234
 +connection: closed
@@ -479,9 +486,8 @@ If the fork itself fails, we still close the connection:
   Eio_mock.Net.on_accept socket [`Return (flow, addr)];
   Switch.run @@ fun sw ->
   Switch.fail sw (Failure "Simulated error");
-  Eio.Net.accept_fork ~sw ~on_error:raise
-    (Eio_mock.Net.Listening_socket.Cast.as_generic socket)
-    (fun _flow _addr -> assert false);
+  Eio.Net.accept_fork ~sw ~on_error:raise socket
+    { connection_handler = (fun _flow _addr -> assert false) };
   traceln "Mock connection should have been closed by now";;
 +tcp/80: accepted connection from tcp:127.0.0.1:1234
 +connection: closed
@@ -499,8 +505,8 @@ Exception: Failure "Simulated error".
   Eio_mock.Net.on_accept socket [`Return (flow, addr)];
   Switch.run @@ fun sw ->
   Eio.Net.accept_fork ~sw ~on_error:(traceln "BUG: %a" Fmt.exn)
-    (Eio_mock.Net.Listening_socket.Cast.as_generic socket)
-    (fun _flow _addr -> Fiber.await_cancel ());
+    socket
+    { connection_handler = (fun _flow _addr -> Fiber.await_cancel ()) };
   Switch.fail sw (Failure "Simulated error");;
 +tcp/80: accepted connection from tcp:127.0.0.1:1234
 +connection: closed
@@ -512,13 +518,16 @@ Exception: Failure "Simulated error".
 ```ocaml
 # Eio_main.run @@ fun _ ->
   Switch.run @@ fun sw ->
-  let a, b = Eio_unix.Net.socketpair_stream ~sw () in
+  let (Eio_unix.Net.Stream_socket.T a,
+       Eio_unix.Net.Stream_socket.T b) =
+    Eio_unix.Net.socketpair_stream ~sw ()
+  in
   ignore (Eio_unix.Net.Stream_socket.fd a : Eio_unix.Fd.t);
   ignore (Eio_unix.Net.Stream_socket.fd b : Eio_unix.Fd.t);
-  Eio.Flow.copy_string "foo" (Eio_unix.Net.Stream_socket.Cast.as_sink a);
+  Eio.Flow.copy_string "foo" a;
   Eio_unix.Net.Stream_socket.close a;
   let msg =
-    Eio.Buf_read.of_flow (Eio_unix.Net.Stream_socket.Cast.as_source b) ~max_size:10
+    Eio.Buf_read.of_flow b ~max_size:10
     |> Eio.Buf_read.take_all
   in
   traceln "Got: %S" msg;;
@@ -533,7 +542,10 @@ ECONNRESET:
 ```ocaml
 # Eio_main.run @@ fun _ ->
   Switch.run @@ fun sw ->
-  let a, b = Eio_unix.Net.socketpair_stream ~sw () in
+  let (Eio_unix.Net.Stream_socket.T a,
+       Eio_unix.Net.Stream_socket.T b) =
+    Eio_unix.Net.socketpair_stream ~sw ()
+  in
   Eio.Flow.copy_string "foo" a;
   Eio.Flow.close b;     (* Close without reading *)
   try
@@ -551,7 +563,10 @@ EPIPE:
 ```ocaml
 # Eio_main.run @@ fun _ ->
   Switch.run @@ fun sw ->
-  let a, b = Eio_unix.Net.socketpair_stream ~sw () in
+  let (Eio_unix.Net.Stream_socket.T a,
+       Eio_unix.Net.Stream_socket.T b) =
+    Eio_unix.Net.socketpair_stream ~sw ()
+  in
   Eio.Flow.close b;
   try
     Eio.Flow.copy_string "foo" a;
@@ -565,8 +580,9 @@ Connection refused:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
+  let (Eio_unix.Net.T net) = env#net in
   Switch.run @@ fun sw ->
-  Eio.Net.connect ~sw env#net (`Unix "idontexist.sock");;
+  Eio.Net.connect ~sw net (`Unix "idontexist.sock");;
 Exception: Eio.Io Fs Not_found _,
   connecting to unix:idontexist.sock
 ```
@@ -576,7 +592,10 @@ Exception: Eio.Io Fs Not_found _,
 ```ocaml
 # Eio_main.run @@ fun _ ->
   Switch.run @@ fun sw ->
-  let a, b = Eio_unix.Net.socketpair_stream ~sw () in
+  let (Eio_unix.Net.Stream_socket.T a,
+       Eio_unix.Net.Stream_socket.T b) =
+    Eio_unix.Net.socketpair_stream ~sw ()
+  in
   Fiber.both
     (fun () ->
        match Eio.Flow.read_exact a (Cstruct.create 1) with
@@ -591,25 +610,29 @@ Exception: Eio.Io Fs Not_found _,
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  Eio.Net.getaddrinfo_stream env#net "127.0.0.1";;
+  let (Eio_unix.Net.T net) = env#net in
+  Eio.Net.getaddrinfo_stream net "127.0.0.1";;
 - : Eio.Net.Sockaddr.stream list = [`Tcp ("\127\000\000\001", 0)]
 ```
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  Eio.Net.getaddrinfo_stream env#net "127.0.0.1" ~service:"80";;
+  let (Eio_unix.Net.T net) = env#net in
+  Eio.Net.getaddrinfo_stream net "127.0.0.1" ~service:"80";;
 - : Eio.Net.Sockaddr.stream list = [`Tcp ("\127\000\000\001", 80)]
 ```
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  Eio.Net.getaddrinfo_datagram env#net "127.0.0.1";;
+  let (Eio_unix.Net.T net) = env#net in
+  Eio.Net.getaddrinfo_datagram net "127.0.0.1";;
 - : Eio.Net.Sockaddr.datagram list = [`Udp ("\127\000\000\001", 0)]
 ```
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  Eio.Net.getaddrinfo_datagram env#net "127.0.0.1" ~service:"80";;
+  let (Eio_unix.Net.T net) = env#net in
+  Eio.Net.getaddrinfo_datagram net "127.0.0.1" ~service:"80";;
 - : Eio.Net.Sockaddr.datagram list = [`Udp ("\127\000\000\001", 80)]
 ```
 
@@ -617,7 +640,8 @@ Exception: Eio.Io Fs Not_found _,
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  Eio_unix.Net.getaddrinfo ~service:"http" env#net "127.0.0.1";;
+  let (Eio_unix.Net.T net) = env#net in
+  Eio_unix.Net.getaddrinfo ~service:"http" net "127.0.0.1";;
 - : Eio.Net.Sockaddr.t list =
 [`Tcp ("\127\000\000\001", 80); `Udp ("\127\000\000\001", 80)]
 ```
@@ -626,7 +650,8 @@ Exception: Eio.Io Fs Not_found _,
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  Eio_unix.Net.getaddrinfo ~service:"ftp" env#net "127.0.0.1";;
+  let (Eio_unix.Net.T net) = env#net in
+  Eio_unix.Net.getaddrinfo ~service:"ftp" net "127.0.0.1";;
 - : Eio.Net.Sockaddr.t list =
 [`Tcp ("\127\000\000\001", 21); `Udp ("\127\000\000\001", 21)]
 ```
@@ -635,7 +660,8 @@ Exception: Eio.Io Fs Not_found _,
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  Eio.Net.getaddrinfo ~service:"https" env#net "google.com";;
+  let (Eio_unix.Net.T net) = env#net in
+  Eio.Net.getaddrinfo ~service:"https" net "google.com";;
 - : Eio.Net.Sockaddr.t list =
 [`Tcp ("�:��", 443); `Udp ("�:��", 443);
  `Tcp ("*\000\020P@\t\b \000\000\000\000\000\000 \014", 443);
@@ -646,8 +672,9 @@ Exception: Eio.Io Fs Not_found _,
 
 ```ocaml
 # Eio_main.run @@ fun env ->
+  let (Eio_unix.Net.T net) = env#net in
   let sockaddr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 80) in
-  Eio.Net.getnameinfo env#net sockaddr;;
+  Eio.Net.getnameinfo net sockaddr;;
 - : string * string = ("localhost", "http")
 ```
 
@@ -847,7 +874,8 @@ connections to finish and then exiting:
   let stop, set_stop = Promise.create () in
   Fiber.both
     (fun () ->
-       Eio.Net.run_server listening_socket handle_connection
+       Eio.Net.run_server listening_socket
+         { connection_handler = handle_connection }
          ~max_connections:10
          ~on_error:raise
          ~stop
@@ -879,7 +907,8 @@ Non-graceful shutdown, closing all connections still in progress:
   let listening_socket = mock_listener ~n_clients:3 ~n_domains:1 in
   Fiber.both
     (fun () ->
-      Eio.Net.run_server listening_socket handle_connection
+      Eio.Net.run_server listening_socket
+        { connection_handler = handle_connection }
         ~max_connections:10
         ~on_error:raise
     )
@@ -906,7 +935,8 @@ Handling the connections with 3 domains, with a graceful shutdown:
   let stop, set_stop = Promise.create () in
   Fiber.both
     (fun () ->
-      Eio.Net.run_server listening_socket handle_connection
+      Eio.Net.run_server listening_socket
+        { connection_handler = handle_connection }
         ~additional_domains:(fake_domain_mgr, n_domains - 1)
         ~max_connections:10
         ~on_error:raise
@@ -955,7 +985,8 @@ Handling the connections with 3 domains, aborting immediately:
   let listening_socket = mock_listener ~n_clients:10 ~n_domains in
   Fiber.both
     (fun () ->
-      Eio.Net.run_server listening_socket handle_connection
+      Eio.Net.run_server listening_socket
+        { connection_handler = handle_connection }
         ~additional_domains:(fake_domain_mgr, n_domains - 1)
         ~max_connections:10
         ~on_error:raise
@@ -981,7 +1012,8 @@ Limiting to 2 concurrent connections:
   let stop, set_stop = Promise.create () in
   Fiber.both
     (fun () ->
-      Eio.Net.run_server listening_socket handle_connection
+      Eio.Net.run_server listening_socket
+        { connection_handler = handle_connection }
         ~max_connections:2
         ~on_error:raise
         ~stop
@@ -1014,14 +1046,14 @@ Limiting to 2 concurrent connections:
 We keep the polymorphism when using a Unix network:
 
 ```ocaml
-let _check_types ~(net:Eio_unix.Net.t) =
+let _check_types ~net:(Eio_unix.Net.T net) =
   Switch.run @@ fun sw ->
   let addr = `Unix "/socket" in
-  let server : Eio.Net.Listening_socket.t =
+  let (Eio.Net.Listening_socket.T server) =
     Eio.Net.listen ~sw net addr ~backlog:5
   in
   Eio.Net.accept_fork ~sw ~on_error:raise server
-    (fun (_flow : [`Generic | `Unix] Eio.Net.stream_socket_ty r) _addr -> assert false);
-  let _client : [`Generic | `Unix] Eio.Net.stream_socket_ty r = Eio.Net.connect ~sw net addr in
+    { connection_handler = (fun (_flow : _ Eio.Net.Stream_socket.t) _addr -> assert false)};
+  let _client : Eio.Net.Stream_socket.r = Eio.Net.connect ~sw net addr in
   ();;
 ```

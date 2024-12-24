@@ -82,17 +82,24 @@ let make : string -> _ t =
   in
   fun label -> (Impl.make label, ops)
 
-let on_connect (type a) (t : (a, _) t) (actions : Eio.Net.Stream_socket.r Handler.actions) =
+let on_connect (type a) (t : (a, _) t) (actions : _ Eio.Net.Stream_socket.t Handler.actions) =
   let t = raw t in
-  Handler.seq t.on_connect (List.map (Action.map Fun.id) actions)
+  let f = Eio.Net.Stream_socket.wrap in
+  Handler.seq t.on_connect (List.map (Action.map f) actions)
 
 let on_listen (type a) (t : (a, _) t) actions =
   let t = raw t in
-  Handler.seq t.on_listen (List.map (Action.map Fun.id) actions)
+  let f (type a) (t, ops) =
+    Eio.Net.Listening_socket.T (t, (ops :> _ Eio.Net.Listening_socket.listening_socket))
+  in
+  Handler.seq t.on_listen (List.map (Action.map f) actions)
 
 let on_datagram_socket (type a) (t : (a, _) t) actions =
   let t = raw t in
-  Handler.seq t.on_datagram_socket (List.map (Action.map Fun.id) actions)
+  let f (type a) (t, ops) =
+    Eio.Net.Datagram_socket.T (t, (ops :> _ Eio.Net.Datagram_socket.datagram_socket))
+  in
+  Handler.seq t.on_datagram_socket (List.map (Action.map f) actions)
 
 let on_getaddrinfo (type a) (t : (a, _) t) actions = Handler.seq (raw t).on_getaddrinfo actions
 
@@ -148,6 +155,12 @@ module Listening_socket = struct
   type r = T : 'a t' -> r
 
   let raw (type a) ((t, ops) : (a, _) t) = ops#raw t
+
+  module Cast = struct
+    let as_generic (T (a, ops)) =
+      Eio.Net.Listening_socket.T
+        (a, (ops :> _ Eio.Net.Listening_socket.listening_socket))
+  end
 end
 
 let listening_socket ?listening_addr label =
@@ -160,11 +173,13 @@ let listening_socket ?listening_addr label =
       method resource_store = resource_store
     end
   in
-  Listening_socket.T (Listening_socket_impl.make ?listening_addr label, ops)
+  Listening_socket_impl.make ?listening_addr label, ops
 
 let on_accept l actions =
   let r = Listening_socket.raw l in
-  let as_accept_pair x = (x :> Flow.r * Eio.Net.Sockaddr.stream) in
+  let as_accept_pair (type a) (((t, ops) : (a, _) Flow.t), stream) =
+    (Flow.T (t, (ops :> _ Flow.flow)), stream)
+  in
   Handler.seq r.on_accept (List.map (Action.map as_accept_pair) actions)
 
 module Cast = struct
