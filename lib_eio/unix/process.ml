@@ -13,33 +13,33 @@ let resolve_program name =
     Some name
   ) else None
 
-let read_of_fd ~sw ~default ~to_close = function
+let read_of_fd (type a) ~sw ~default ~to_close = function
   | None -> default
-  | Some f ->
-    match Resource.fd_opt f with
-    | Some fd -> fd
+  | Some (((f, ops) : (a, _) Eio.Flow.Source.t) as source) ->
+    match Eio.Resource_store.find ops#resource_store ~key:Fd.key.key with
+    | Some fd -> fd f
     | None ->
-      let r, w = Private.pipe sw in
+      let (Source.T r), (Sink.T w) = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy f w;
-          Eio.Flow.close w
+          Eio.Flow.copy source w;
+          Sink.close w
         );
-      let r = Resource.fd r in
+      let r = Source.fd r in
       to_close := r :: !to_close;
       r
 
-let write_of_fd ~sw ~default ~to_close = function
+let write_of_fd (type a) ~sw ~default ~to_close = function
   | None -> default
-  | Some f ->
-    match Resource.fd_opt f with
-    | Some fd -> fd
+  | Some (((f, ops) : (a, _) Eio.Flow.Sink.t) as sink) ->
+    match Eio.Resource_store.find ops#resource_store ~key:Fd.key.key with
+    | Some fd -> fd f
     | None ->
-      let r, w = Private.pipe sw in
+      let (Source.T r, Sink.T w) = Private.pipe sw in
       Fiber.fork ~sw (fun () ->
-          Eio.Flow.copy r f;
-          Eio.Flow.close r
+          Eio.Flow.copy r sink;
+          Source.close r
         );
-      let w = Resource.fd w in
+      let w = Sink.fd w in
       to_close := w :: !to_close;
       w
 
@@ -69,35 +69,101 @@ let get_env = function
   | Some e -> e
   | None -> Unix.environment ()
 
-type ty = [ `Generic | `Unix ] Eio.Process.ty
-type 'a t = ([> ty] as 'a) r
+class type ['a] process_c = object
+  method process : (module Eio.Process.PROCESS with type t = 'a)
+  method resource_store : 'a Eio.Resource_store.t
+end
 
-type mgr_ty = [`Generic | `Unix] Eio.Process.mgr_ty
-type 'a mgr = ([> mgr_ty] as 'a) r
+type ('a, 'r) t =
+  ('a *
+   (< process : (module Eio.Process.PROCESS with type t = 'a)
+    ; resource_store : 'a Eio.Resource_store.t
+    ; .. > as 'r))
+(** A process. *)
+
+type 'a t' = ('a, 'a process_c) t
+
+type r = T : 'a t' -> r [@@unboxed]
+
+type process = r
+
+module Process = struct
+  let as_generic_process (T (t, ops)) =
+    Eio.Process.T
+      (t, (ops :> _ Eio.Process.process_c))
+end
+
+module type MGR_unix = sig
+  type t
+
+  val pipe :
+    t ->
+    sw:Switch.t ->
+    Source.r * Sink.r
+
+  val spawn :
+    t ->
+    sw:Switch.t ->
+    ?cwd:Eio.Path.t ->
+    ?stdin:_ Eio.Flow.Source.t ->
+    ?stdout:_ Eio.Flow.Sink.t ->
+    ?stderr:_ Eio.Flow.Sink.t ->
+    ?env:string array ->
+    ?executable:string ->
+    string list ->
+    Eio.Process.r
+  val spawn_unix :
+    t ->
+    sw:Switch.t ->
+    ?cwd:Eio.Path.t ->
+    env:string array ->
+    fds:(int * Fd.t * Fork_action.blocking) list ->
+    executable:string ->
+    string list ->
+    process
+end
+
+class type ['a] mgr_c = object
+  method mgr : (module Eio.Process.MGR with type t = 'a)
+  method mgr_unix : (module MGR_unix with type t = 'a)
+  method resource_store : 'a Eio.Resource_store.t
+end
+
+type ('a, 'r) mgr =
+  ('a *
+   (< mgr : (module Eio.Process.MGR with type t = 'a)
+    ; mgr_unix : (module MGR_unix with type t = 'a)
+    ; resource_store : 'a Eio.Resource_store.t
+    ; .. > as 'r))
+
+type 'a mgr' = ('a, 'a mgr_c) mgr
+
+type mgr_r = Mgr : 'a mgr' -> mgr_r [@@unboxed]
 
 module Pi = struct
-  module type MGR = sig
-    include Eio.Process.Pi.MGR
+  let process (type a) (module X : Eio.Process.PROCESS with type t = a) (t : a) =
+    let resource_store = Eio.Resource_store.create () in
+    (t, object
+       method process = (module X : Eio.Process.PROCESS with type t = a)
+       method resource_store = resource_store
+     end)
 
-    val spawn_unix :
-      t ->
-      sw:Switch.t ->
-      ?cwd:Eio.Fs.dir_ty Eio.Path.t ->
-      env:string array ->
-      fds:(int * Fd.t * Fork_action.blocking) list ->
-      executable:string ->
-      string list ->
-      ty r
-  end
+  let mgr_unix (type a) (module X : MGR_unix with type t = a) (t : a) =
+    let resource_store = Eio.Resource_store.create () in
+    let module X_mgr : Eio.Process.MGR with type t = a = struct
+      type t = X.t
 
-  type (_, _, _) Eio.Resource.pi +=
-    | Mgr_unix : ('t, (module MGR with type t = 't), [> mgr_ty]) Eio.Resource.pi
+      let spawn = X.spawn
 
-  let mgr_unix (type t tag) (module X : MGR with type t = t and type tag = tag) =
-    Eio.Resource.handler [
-      H (Eio.Process.Pi.Mgr, (module X));
-      H (Mgr_unix, (module X));
-    ]
+      let pipe t ~sw =
+        let (r, w) = X.pipe t ~sw in
+        (Source.Cast.as_closable_generic r, Sink.Cast.as_closable_generic w)
+    end in
+    (t, object
+      method mgr = (module X_mgr : Eio.Process.MGR with type t = a)
+      method mgr_unix = (module X : MGR_unix with type t = a)
+      method resource_store = resource_store
+    end)
 end
 
 module Make_mgr (X : sig
@@ -106,20 +172,17 @@ module Make_mgr (X : sig
   val spawn_unix :
     t ->
     sw:Switch.t ->
-    ?cwd:Eio.Fs.dir_ty Eio.Path.t ->
+    ?cwd:Eio.Path.t ->
     env:string array ->
     fds:(int * Fd.t * Fork_action.blocking) list ->
     executable:string ->
     string list ->
-    ty r
+    process
 end) = struct
   type t = X.t
 
-  type tag = [ `Generic | `Unix ]
-
   let pipe _ ~sw =
-    (Private.pipe sw :> ([Eio.Resource.close_ty | Eio.Flow.source_ty] r *
-    [Eio.Resource.close_ty | Eio.Flow.sink_ty] r))
+    Private.pipe sw
 
   let spawn v ~sw ?cwd ?stdin ?stdout ?stderr ?env ?executable args =
     let executable = get_executable executable ~args in
@@ -133,13 +196,13 @@ end) = struct
       1, stdout_fd, `Blocking;
       2, stderr_fd, `Blocking;
     ] in
-    X.spawn_unix v ~sw ?cwd ~env ~fds ~executable args
+    X.spawn_unix v ~sw ?cwd ~env ~fds ~executable args |> Process.as_generic_process
 
   let spawn_unix = X.spawn_unix
 end
 
-let spawn_unix ~sw (Eio.Resource.T (v, ops)) ?cwd ~fds ?env ?executable args =
-  let module X = (val (Eio.Resource.get ops Pi.Mgr_unix)) in
+let spawn_unix (type a) ~sw ((v, ops) : (a, _) mgr) ?cwd ~fds ?env ?executable args =
+  let module X = (val ops#mgr_unix) in
   let executable = get_executable executable ~args in
   let env = get_env env in
   X.spawn_unix v ~sw ?cwd ~fds ~env ~executable args
@@ -148,3 +211,9 @@ let sigchld = Eio.Condition.create ()
 
 let install_sigchld_handler () =
   Sys.(set_signal sigchld) (Signal_handle (fun (_:int) -> Eio.Condition.broadcast sigchld))
+
+module Cast = struct
+  let as_generic_process = Process.as_generic_process
+  let as_generic_mgr (Mgr (a, ops)) =
+    Eio.Process.Mgr (a, (ops :> _ Eio.Process.mgr_c))
+end

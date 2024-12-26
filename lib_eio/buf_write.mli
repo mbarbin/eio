@@ -85,7 +85,7 @@ exception Flush_aborted
 
 (** {2 Running} *)
 
-val with_flow : ?initial_size:int -> _ Flow.sink -> (t -> 'a) -> 'a
+val with_flow : ?initial_size:int -> _ Flow.t -> (t -> 'a) -> 'a
 (** [with_flow flow fn] runs [fn writer], where [writer] is a buffer that flushes to [flow].
 
     Concurrently with [fn], it also runs a fiber that copies from [writer] to [flow].
@@ -100,6 +100,8 @@ val with_flow : ?initial_size:int -> _ Flow.sink -> (t -> 'a) -> 'a
                         New buffers will be allocated as needed, with the same size.
                         If the buffer is too small to contain a write, the size is increased. *)
 
+
+val with_sink : ?initial_size:int -> _ Flow.sink -> (t -> 'a) -> 'a
 
 (** {2 Buffered Writes}
 

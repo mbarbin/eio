@@ -102,6 +102,4 @@ module Secure_random = struct
   let read_methods = []
 end
 
-let secure_random =
-  let ops = Eio.Flow.Pi.source (module Secure_random) in
-  Eio.Resource.T ((), ops)
+let secure_random = Eio.Flow.Source.make (module Secure_random) ()

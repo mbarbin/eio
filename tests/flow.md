@@ -27,8 +27,8 @@ let mock_source =
         t := Cstruct.shiftv (x :: xs) len;
         len
   end in
-  let ops = Eio.Flow.Pi.source (module X) in
-  fun items -> Eio.Resource.T (ref items, ops)
+  let ops = Eio.Flow.Source.make (module X) in
+  fun items -> ops (ref items)
 ```
 
 ## read_exact
@@ -142,7 +142,7 @@ Writing to and reading from a pipe.
 ```ocaml
 # Eio_main.run @@ fun env ->
   Switch.run @@ fun sw ->
-  let r, w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
   let msg = "Hello, world" in
   Eio.Fiber.both
     (fun () ->
@@ -163,8 +163,8 @@ Make sure we don't crash on SIGPIPE:
 ```ocaml
 # Eio_main.run @@ fun env ->
   Switch.run @@ fun sw ->
-  let r, w = Eio_unix.pipe sw in
-  Eio.Flow.close r;
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
+  Eio_unix.Source.close r;
   try
     Eio.Flow.copy_string "Test" w;
     assert false
@@ -181,7 +181,7 @@ Sending a very long vector over a flow should just send it in chunks, not fail:
 ```ocaml
 # Eio_main.run @@ fun env ->
   Switch.run @@ fun sw ->
-  let r, w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
   let a = Cstruct.of_string "abc" in
   let vecs = List.init 10_000 (Fun.const a) in
   Fiber.both
@@ -205,7 +205,7 @@ Even if a fiber is already ready to run, we still perform IO from time to time:
 ```ocaml
 # run @@ fun _ ->
   Switch.run @@ fun sw ->
-  let r, w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
   let rec spin () = Fiber.yield (); spin () in
   Fiber.fork_daemon ~sw spin;
   Fiber.both

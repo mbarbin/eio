@@ -15,7 +15,7 @@ let run_in_domain mgr =
       )
   done
 
-let main ~dm mgr =
+let main ~dm (Eio_unix.Process.Mgr mgr) =
   let t0 = Unix.gettimeofday () in
   for i = 1 to n_rounds do
     Switch.run ~name:"round" (fun sw ->
@@ -32,4 +32,4 @@ let main ~dm mgr =
 
 let () =
   Eio_main.run @@ fun env ->
-  main ~dm:env#domain_mgr  env#process_mgr
+  main ~dm:env#domain_mgr env#process_mgr

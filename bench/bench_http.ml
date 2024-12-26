@@ -23,7 +23,7 @@ let parse_headers r =
   !len
 
 let handle_connection conn _addr =
-  Eio.Buf_write.with_flow conn @@ fun w ->
+  Eio.Buf_write.with_sink conn @@ fun w ->
   let rec requests r =
     let _req = Eio.Buf_read.line r in
     let len = parse_headers r in
@@ -40,7 +40,7 @@ let handle_connection conn _addr =
 let run_client ~n_requests id conn =
   let total = ref 0 in
   let r = Eio.Buf_read.of_flow conn ~max_size:max_int in
-  Eio.Buf_write.with_flow conn @@ fun w ->
+  Eio.Buf_write.with_sink conn @@ fun w ->
   for i = 1 to n_requests do
     let msg = Printf.sprintf "%s / request %d" id i in
     Eio.Buf_write.string w "POST / HTTP/1.1\r\n";
@@ -59,15 +59,17 @@ let run_client ~n_requests id conn =
   done;
   !total
 
-let main net domain_mgr ~n_client_domains ~n_server_domains ~n_connections_per_domain ~n_requests_per_connection =
+let main (Eio_unix.Net.T net) domain_mgr ~n_client_domains ~n_server_domains ~n_connections_per_domain ~n_requests_per_connection =
   let total = Atomic.make 0 in
   let t0 = Unix.gettimeofday () in
   Switch.run ~name:"main" (fun sw ->
       let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 8085) in
       let backlog = n_connections_per_domain * n_client_domains in
-      let server_socket = Eio.Net.listen ~reuse_addr:true ~backlog ~sw net addr in
+      let (Eio.Net.Listening_socket.T server_socket) =
+        Eio.Net.listen ~reuse_addr:true ~backlog ~sw net addr
+      in
       Fiber.fork_daemon ~sw (fun () ->
-          Eio.Net.run_server server_socket handle_connection
+          Eio.Net.run_server server_socket { connection_handler = handle_connection }
             ~additional_domains:(domain_mgr, n_server_domains - 1)
             ~on_error:raise
         );
@@ -78,7 +80,7 @@ let main net domain_mgr ~n_client_domains ~n_server_domains ~n_connections_per_d
                 for i = 1 to n_connections_per_domain do
                   Fiber.fork ~sw (fun () ->
                       let id = Printf.sprintf "domain %d / conn %d" domain i in
-                      let conn = Eio.Net.connect ~sw net addr in
+                      let Eio.Net.Stream_socket.T conn = Eio.Net.connect ~sw net addr in
                       let requests = run_client ~n_requests:n_requests_per_connection id conn in
                       ignore (Atomic.fetch_and_add total requests : int)
                     )

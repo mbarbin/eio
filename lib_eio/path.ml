@@ -1,4 +1,6 @@
-type 'a t = 'a Fs.dir * Fs.path
+type 'a t' = 'a Fs.dir * Fs.path
+
+type t = Path : 'a t' -> t [@@unboxed]
 
 (* Like [Filename.is_relative] but always using "/" as the separator. *)
 let is_relative = function
@@ -11,19 +13,19 @@ let concat a b =
   if l = 0 || a.[l - 1] = '/' then a ^ b
   else a ^ "/" ^ b
 
-let ( / ) (dir, p1) p2 =
-  match p1, p2 with
+let ( / ) (Path (dir, p1)) p2 =
+  Path (match p1, p2 with
   | p1, "" -> (dir, concat p1 p2)
   | _, p2 when not (is_relative p2) -> (dir, p2)
   | ".", p2 -> (dir, p2)
-  | p1, p2 -> (dir, concat p1 p2)
+  | p1, p2 -> (dir, concat p1 p2))
 
-let pp f (Resource.T (t, ops), p) =
+let pp f (Path (Resource.T (t, ops), p)) =
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   if p = "" then Fmt.pf f "<%a>" X.pp t
   else Fmt.pf f "<%a:%s>" X.pp t (String.escaped p)
 
-let native (Resource.T (t, ops), p) =
+let native (Path (Resource.T (t, ops), p)) =
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   X.native t p
 
@@ -49,7 +51,7 @@ let remove_trailing_slashes s =
   in
   aux (String.length s)
 
-let split (dir, p) =
+let split' (dir, p) =
   match remove_trailing_slashes p with
   | "" -> None
   | "/" -> None
@@ -64,8 +66,13 @@ let split (dir, p) =
       in
       Some ((dir, dirname), basename)
 
+let split (Path t) =
+  match split' t with
+  | None -> None
+  | Some (t, b) -> Some (Path t, b)
+
 let open_in ~sw t =
-  let (Resource.T (dir, ops), path) = t in
+  let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try X.open_in dir ~sw path
   with Exn.Io _ as ex ->
@@ -73,25 +80,27 @@ let open_in ~sw t =
     Exn.reraise_with_context ex bt "opening %a" pp t
 
 let open_out ~sw ?(append=false) ~create t =
-  let (Resource.T (dir, ops), path) = t in
+  let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try X.open_out dir ~sw ~append ~create path
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
     Exn.reraise_with_context ex bt "opening %a" pp t
 
-let open_dir ~sw t =
-  let (Resource.T (dir, ops), path) = t in
+let open_dir' ~sw t =
+  let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try
     let sub = X.open_dir dir ~sw path, "" in
-    (sub : [`Close | `Dir] t :> [< `Close | `Dir] t)
+    (sub : [`Close | `Dir] t' :> [< `Close | `Dir] t')
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
     Exn.reraise_with_context ex bt "opening directory %a" pp t
 
+let open_dir ~sw t = Path (open_dir' ~sw t)
+
 let mkdir ~perm t =
-  let (Resource.T (dir, ops), path) = t in
+  let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try X.mkdir dir ~perm path
   with Exn.Io _ as ex ->
@@ -99,7 +108,7 @@ let mkdir ~perm t =
     Exn.reraise_with_context ex bt "creating directory %a" pp t
 
 let read_dir t =
-  let (Resource.T (dir, ops), path) = t in
+  let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try List.sort String.compare (X.read_dir dir path)
   with Exn.Io _ as ex ->
@@ -107,7 +116,7 @@ let read_dir t =
     Exn.reraise_with_context ex bt "reading directory %a" pp t
 
 let stat ~follow t =
-  let (Resource.T (dir, ops), path) = t in
+  let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try X.stat ~follow dir path
   with Exn.Io _ as ex ->
@@ -130,16 +139,19 @@ let with_open_in path fn =
 let with_open_out ?append ~create path fn =
   Switch.run ~name:"with_open_out" @@ fun sw -> fn (open_out ~sw ?append ~create path)
 
+let with_open_dir' path fn =
+  Switch.run ~name:"with_open_dir" @@ fun sw -> fn (open_dir' ~sw path)
+
 let with_open_dir path fn =
-  Switch.run ~name:"with_open_dir" @@ fun sw -> fn (open_dir ~sw path)
+  with_open_dir' path (fun dir -> fn (Path dir))
 
 let with_lines path fn =
-  with_open_in path @@ fun flow ->
+  with_open_in path @@ fun (File.Ro.T flow) ->
   let buf = Buf_read.of_flow flow ~max_size:max_int in
   fn (Buf_read.lines buf)
 
-let load (t, path) =
-  with_open_in (t, path) @@ fun flow ->
+let load (Path (t, path)) =
+  with_open_in (Path (t, path)) @@ fun (File.Ro.T flow) ->
   try
     let size = File.size flow in
     if Optint.Int63.(compare size (of_int Sys.max_string_length)) = 1 then
@@ -154,14 +166,14 @@ let load (t, path) =
     Cstruct.to_string ~len:got buf
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
-    Exn.reraise_with_context ex bt "loading %a" pp (t, path)
+    Exn.reraise_with_context ex bt "loading %a" pp (Path (t, path))
 
 let save ?append ~create path data =
-  with_open_out ?append ~create path @@ fun flow ->
+  with_open_out ?append ~create path @@ fun (File.Rw.T flow) ->
   Flow.copy_string data flow
 
 let unlink t =
-  let (Resource.T (dir, ops), path) = t in
+  let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try X.unlink dir path
   with Exn.Io _ as ex ->
@@ -169,7 +181,7 @@ let unlink t =
     Exn.reraise_with_context ex bt "removing file %a" pp t
 
 let rmdir t =
-  let (Resource.T (dir, ops), path) = t in
+  let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try X.rmdir dir path
   with Exn.Io _ as ex ->
@@ -199,11 +211,11 @@ let rec rmtree ~missing_ok t =
     catch_missing ~missing_ok unlink t
 
 let rmtree ?(missing_ok=false) t =
-  rmtree ~missing_ok (t :> Fs.dir_ty t)
+  rmtree ~missing_ok (t :> t)
 
 let rename t1 t2 =
-  let (dir2, new_path) = t2 in
-  let (Resource.T (dir, ops), old_path) = t1 in
+  let (Path (dir2, new_path)) = t2 in
+  let (Path (Resource.T (dir, ops), old_path)) = t1 in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try X.rename dir old_path (dir2 :> _ Fs.dir) new_path
   with Exn.Io _ as ex ->
@@ -211,7 +223,7 @@ let rename t1 t2 =
     Exn.reraise_with_context ex bt "renaming %a to %a" pp t1 pp t2
 
 let symlink ~link_to source =
-  let (Resource.T (dir, ops), path) = source in
+  let (Path (Resource.T (dir, ops), path)) = source in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try X.symlink dir path ~link_to
   with Exn.Io _ as ex ->
@@ -232,7 +244,7 @@ let rec mkdirs ?(exists_ok=false) ~perm t =
   with Exn.Io (Fs.E Already_exists _, _) when exists_ok && is_directory t -> ()
 
 let read_link t =
-  let (Resource.T (dir, ops), path) = t in
+  let (Path (Resource.T (dir, ops), path)) = t in
   let module X = (val (Resource.get ops Fs.Pi.Dir)) in
   try X.read_link dir path
   with Exn.Io _ as ex ->

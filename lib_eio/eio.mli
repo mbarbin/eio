@@ -139,6 +139,7 @@ end
 
 (** Defines the base resource type. *)
 module Resource = Resource
+module Resource_store = Resource_store
 
 (** {2 Byte streams} *)
 
@@ -207,19 +208,19 @@ module Stdenv : sig
 
       To use these, see {!Flow}. *)
 
-  val stdin  : <stdin  : _ Flow.source as 'a; ..> -> 'a
-  val stdout : <stdout : _ Flow.sink   as 'a; ..> -> 'a
-  val stderr : <stderr : _ Flow.sink   as 'a; ..> -> 'a
+  val stdin  : <stdin  : Flow.Source.r as 'a; ..> -> 'a
+  val stdout : <stdout : Flow.Sink.r   as 'a; ..> -> 'a
+  val stderr : <stderr : Flow.Sink.r   as 'a; ..> -> 'a
 
   (** {1 File-system access}
 
       To use these, see {!Path}. *)
 
-  val cwd : <cwd : _ Path.t as 'a; ..> -> 'a
+  val cwd : <cwd : Path.t as 'a; ..> -> 'a
   (** [cwd t] is the current working directory of the process (this may change
       over time if the process does a "chdir" operation, which is not recommended). *)
 
-  val fs : <fs : _ Path.t as 'a; ..> -> 'a
+  val fs : <fs : Path.t as 'a; ..> -> 'a
   (** [fs t] is the process's full access to the filesystem.
 
       Paths can be absolute or relative (to the current working directory).
@@ -233,7 +234,7 @@ module Stdenv : sig
       To use this, see {!Net}.
   *)
 
-  val net : <net : _ Net.t as 'a; ..> -> 'a
+  val net : <net : _ as 'a; ..> -> 'a
   (** [net t] gives access to the process's network namespace. *)
 
   (** {1 Processes }
@@ -241,7 +242,7 @@ module Stdenv : sig
       To use this, see {!Process}.
   *)
 
-  val process_mgr : <process_mgr : _ Process.mgr as 'a; ..> -> 'a
+  val process_mgr : <process_mgr : _ as 'a; ..> -> 'a
   (** [process_mgr t] allows you to manage child processes. *)
 
   (** {1 Domains (using multiple CPU cores)}
@@ -249,7 +250,7 @@ module Stdenv : sig
       To use this, see {!Domain_manager}.
   *)
 
-  val domain_mgr : <domain_mgr : _ Domain_manager.t as 'a; ..> -> 'a
+  val domain_mgr : <domain_mgr : Domain_manager.t as 'a; ..> -> 'a
   (** [domain_mgr t] allows running code on other cores. *)
 
   (** {1 Time}
@@ -265,7 +266,7 @@ module Stdenv : sig
 
   (** {1 Randomness} *)
 
-  val secure_random : <secure_random : _ Flow.source as 'a; ..> -> 'a
+  val secure_random : <secure_random : Flow.Source.r as 'a; ..> -> 'a
   (** [secure_random t] is an infinite source of random bytes suitable for cryptographic purposes. *)
 
   (** {1 Debugging} *)

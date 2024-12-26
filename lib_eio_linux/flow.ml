@@ -1,5 +1,3 @@
-open Eio.Std
-
 (* When copying between a source with an FD and a sink with an FD, we can share the chunk
    and avoid copying. *)
 let fast_copy src dst =
@@ -57,7 +55,7 @@ let copy_with_rsb rsb dst =
 (* Copy by allocating a chunk from the pre-shared buffer and asking
    the source to write into it. This used when the other methods
    aren't available. *)
-let fallback_copy (type src) (module Src : Eio.Flow.Pi.SOURCE with type t = src) src dst =
+let fallback_copy (type src) (module Src : Eio.Flow.SOURCE with type t = src) src dst =
   let fallback () =
     (* No chunks available. Use regular memory instead. *)
     let buf = Cstruct.create 4096 in
@@ -78,8 +76,6 @@ let fallback_copy (type src) (module Src : Eio.Flow.Pi.SOURCE with type t = src)
   with End_of_file -> ()
 
 module Impl = struct
-  type tag = [`Generic | `Unix]
-
   type t = Eio_unix.Fd.t
 
   let fd t = t
@@ -101,12 +97,11 @@ module Impl = struct
 
   let single_write t bufs = Low_level.writev_single t (truncate_to_iomax bufs)
 
-  let copy t ~src =
-    match Eio_unix.Resource.fd_opt src with
-    | Some src -> fast_copy_try_splice src t
+  let copy (type a) t ~src:((src, ops) : (a, _) Eio.Flow.Source.t) =
+    match Eio.Resource_store.find ops#resource_store ~key:Eio_unix.Fd.key.key with
+    | Some fd -> fast_copy_try_splice (fd src) t
     | None ->
-      let Eio.Resource.T (src, ops) = src in
-      let module Src = (val (Eio.Resource.get ops Eio.Flow.Pi.Source)) in
+      let module Src = (val ops#source) in
       let rec aux = function
         | Eio.Flow.Read_source_buffer rsb :: _ -> copy_with_rsb (rsb src) t
         | _ :: xs -> aux xs
@@ -132,15 +127,11 @@ module Impl = struct
   let truncate = Low_level.ftruncate
 end
 
-let flow_handler = Eio_unix.Pi.flow_handler (module Impl)
+let of_fd' fd = Eio_unix.Flow.make (module Impl) fd
+let of_fd fd = Eio_unix.Flow.T (of_fd' fd)
 
-let of_fd fd =
-  let r = Eio.Resource.T (fd, flow_handler) in
-  (r : [`Unix_fd | Eio_unix.Net.stream_socket_ty | Eio.File.rw_ty] r :>
-     [< `Unix_fd | Eio_unix.Net.stream_socket_ty | Eio.File.rw_ty] r)
-
-let source fd = (of_fd fd :> Eio_unix.source_ty r)
-let sink   fd = (of_fd fd :> Eio_unix.sink_ty r)
+let source fd = (of_fd fd |> Eio_unix.Flow.Cast.as_unix_source)
+let sink   fd = (of_fd fd |> Eio_unix.Flow.Cast.as_unix_sink)
 
 let stdin = source Eio_unix.Fd.stdin
 let stdout = sink Eio_unix.Fd.stdout
@@ -153,5 +144,5 @@ module Secure_random = struct
 end
 
 let secure_random =
-  let ops = Eio.Flow.Pi.source (module Secure_random) in
-  Eio.Resource.T ((), ops)
+  Eio.Flow.Source.T
+    (Eio.Flow.Source.make (module Secure_random) ())

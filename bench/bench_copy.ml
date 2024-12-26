@@ -6,7 +6,7 @@ let chunk_size = 1 lsl 16
 let n_chunks = 10000
 let n_bytes = n_chunks * chunk_size
 
-let run_client sock =
+let run_client (Eio_unix.Net.Stream_socket.T sock) =
   Fiber.both
     (fun () ->
        let chunk = Cstruct.create chunk_size in
@@ -37,8 +37,13 @@ let time name service =
 
 let run _env =
   [
-    time "default" (fun sock -> Eio.Flow.copy sock sock);
-    time "buf_read" (fun sock ->
-        let r = Eio.Buf_read.of_flow sock ~initial_size:(64 * 1024) ~max_size:(64 * 1024) |> Eio.Buf_read.as_flow in
+    time "default" (fun (Eio_unix.Net.Stream_socket.T sock) ->
+      Eio.Flow.copy sock sock);
+    time "buf_read" (fun (Eio_unix.Net.Stream_socket.T sock) ->
+        let r =
+          Eio.Buf_read.of_flow sock
+            ~initial_size:(64 * 1024) ~max_size:(64 * 1024)
+          |> Eio.Buf_read.as_flow
+        in
         Eio.Flow.copy r sock);
   ]

@@ -27,291 +27,106 @@ let () =
       | _ -> false
     )
 
-module Ipaddr = struct
-  type 'a t = string   (* = [Unix.inet_addr], but avoid a Unix dependency here *)
+module Ipaddr = Ipaddr
 
-  module V4 = struct
-    let any      = "\000\000\000\000"
-    let loopback = "\127\000\000\001"
+module Sockaddr = Sockaddr
 
-    let pp f t =
-      Fmt.pf f "%d.%d.%d.%d"
-        (Char.code t.[0])
-        (Char.code t.[1])
-        (Char.code t.[2])
-        (Char.code t.[3])
-  end
+module Stream_socket = Stream_socket
 
-  module V6 = struct
-    let any      = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000"
-    let loopback = "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\001"
+module Listening_socket = Listening_socket
 
-    let to_int16 t =
-      let get i = Char.code (t.[i]) in
-      let pair i = (get i lsl 8) lor (get (i + 1)) in
-      List.init 8 (fun i -> pair (i * 2))
+type connection_handler =
+  { connection_handler : 'a 'b. ('a, 'b) Stream_socket.t -> Sockaddr.stream -> unit }
 
-    (* [calc_elide elide zeros acc parts] finds the best place for the "::"
-       when printing an IPv6 address.
-       Returns [None, rev t] if there are no pairs of zeros, or
-       [Some (-n), rev t'] where [n] is the length of the longest run of zeros
-       and [t'] is [t] with all runs of zeroes replaced with [-len_run]. *)
-    let calc_elide t =
-      (* [elide] is the negative of the length of the best previous run of zeros seen.
-         [zeros] is the current run.
-         [acc] is the values seen so far, with runs of zeros replaced by a
-         negative value giving the length of the run. *)
-      let rec loop elide zeros acc = function
-      | 0 :: xs -> loop elide (zeros - 1) acc xs
-      | n :: xs when zeros = 0 -> loop elide 0 (n :: acc) xs
-      | n :: xs -> loop (min elide zeros) 0 (n :: zeros :: acc) xs
-      | [] ->
-        let elide = min elide zeros in
-        let parts = if zeros = 0 then acc else zeros :: acc in
-        ((if elide < -1 then Some elide else None), List.rev parts)
-          
-      in
-      loop 0 0 [] t
+module Datagram_socket = Datagram_socket
 
-    let rec cons_zeros l x =
-      if x >= 0 then l else cons_zeros (Some 0 :: l) (x + 1)
+module type NETWORK = sig
+  type t
 
-    let elide l =
-      let rec aux ~elide = function
-        | [] -> []
-        | x :: xs when x >= 0 ->
-          Some x :: aux ~elide xs
-        | x :: xs when Some x = elide ->
-          None :: aux ~elide:None xs
-        | z :: xs ->
-          cons_zeros (aux ~elide xs) z
-      in
-      let elide, l = calc_elide l in
-      assert (match elide with Some x when x < -8 -> false | _ -> true);
-      aux ~elide l
+  val listen : t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t -> Sockaddr.stream -> Listening_socket.r
+  val connect : t -> sw:Switch.t -> Sockaddr.stream -> Stream_socket.r
+  val datagram_socket :
+    t
+    -> reuse_addr:bool
+    -> reuse_port:bool
+    -> sw:Switch.t
+    -> [Sockaddr.datagram | `UdpV4 | `UdpV6]
+    -> Datagram_socket.r
 
-    (* Based on https://github.com/mirage/ocaml-ipaddr/
-       See http://tools.ietf.org/html/rfc5952 *)
-    let pp f t =
-      let comp = to_int16 t in
-      let v4 = match comp with [0; 0; 0; 0; 0; 0xffff; _; _] -> true | _ -> false in
-      let l = elide comp in
-      let rec fill = function
-        | [ Some hi; Some lo ] when v4 ->
-          Fmt.pf f "%d.%d.%d.%d"
-            (hi lsr 8) (hi land 0xff)
-            (lo lsr 8) (lo land 0xff)
-        | None :: xs ->
-          Fmt.string f "::";
-          fill xs
-        | [ Some n ] -> Fmt.pf f "%x" n
-        | Some n :: None :: xs ->
-          Fmt.pf f "%x::" n;
-          fill xs
-        | Some n :: xs ->
-          Fmt.pf f "%x:" n;
-          fill xs
-        | [] -> ()
-      in
-      fill l
-  end
-
-  type v4v6 = [`V4 | `V6] t
-
-  let fold ~v4 ~v6 t =
-    match String.length t with
-    | 4 -> v4 t
-    | 16 -> v6 t
-    | _ -> assert false
-
-  let of_raw t =
-    match String.length t with
-    | 4 | 16 -> t
-    | x -> Fmt.invalid_arg "An IP address must be either 4 or 16 bytes long (%S is %d bytes)" t x
-
-  let pp f = fold ~v4:(V4.pp f) ~v6:(V6.pp f)
-
-  let pp_for_uri f =
-    fold
-      ~v4:(V4.pp f)
-      ~v6:(Fmt.pf f "[%a]" V6.pp)
+  val getaddrinfo : t -> service:string -> string -> Sockaddr.t list
+  val getnameinfo : t -> Sockaddr.t -> (string * string)
 end
 
-module Sockaddr = struct
-  type stream = [
-    | `Unix of string
-    | `Tcp of Ipaddr.v4v6 * int
-  ]
-
-  type datagram = [
-    | `Udp of Ipaddr.v4v6 * int
-    | `Unix of string
-  ]
-
-  type t = [ stream | datagram ]
-
-  let pp f = function
-    | `Unix path ->
-      Format.fprintf f "unix:%s" path
-    | `Tcp (addr, port) ->
-      Format.fprintf f "tcp:%a:%d" Ipaddr.pp_for_uri addr port
-    | `Udp (addr, port) ->
-      Format.fprintf f "udp:%a:%d" Ipaddr.pp_for_uri addr port
+class type ['a] network = object
+  method network : (module NETWORK with type t = 'a)
 end
 
-type socket_ty = [`Socket | `Close]
-type 'a socket = ([> socket_ty] as 'a) r
+type ('a, 'r) t =
+  ('a *
+   (< network : (module NETWORK with type t = 'a)
+    ; ..
+    > as 'r))
 
-type 'tag stream_socket_ty = [`Stream | `Platform of 'tag | `Shutdown | socket_ty | Flow.source_ty | Flow.sink_ty]
-type 'a stream_socket = 'a r
-  constraint 'a = [> [> `Generic] stream_socket_ty]
+type 'a t' = ('a, 'a network) t
 
-type 'tag listening_socket_ty = [ `Accept | `Platform of 'tag | socket_ty]
-type 'a listening_socket = 'a r
-  constraint 'a = [> [> `Generic] listening_socket_ty]
+type r = T : 'a t' -> r [@@unboxed]
 
-type 'a connection_handler = 'a stream_socket -> Sockaddr.stream -> unit
+let make (type t) (module X : NETWORK with type t = t) (t : t) =
+  (t, object
+     method network = (module X : NETWORK with type t = t)
+   end)
 
-type 'tag datagram_socket_ty = [`Datagram | `Platform of 'tag | `Shutdown | socket_ty]
-type 'a datagram_socket = 'a r
-  constraint 'a = [> [> `Generic] datagram_socket_ty]
-
-type 'tag ty = [`Network | `Platform of 'tag]
-type 'a t = 'a r
-  constraint 'a = [> [> `Generic] ty]
-
-module Pi = struct
-  module type STREAM_SOCKET = sig
-    type tag
-    include Flow.Pi.SHUTDOWN
-    include Flow.Pi.SOURCE with type t := t
-    include Flow.Pi.SINK with type t := t
-    val close : t -> unit
-  end
-
-  let stream_socket (type t tag) (module X : STREAM_SOCKET with type t = t and type tag = tag) =
-    Resource.handler @@
-    H (Resource.Close, X.close) ::
-    Resource.bindings (Flow.Pi.two_way (module X))
-
-  module type DATAGRAM_SOCKET = sig
-    type tag
-    include Flow.Pi.SHUTDOWN
-    val send : t -> ?dst:Sockaddr.datagram -> Cstruct.t list -> unit
-    val recv : t -> Cstruct.t -> Sockaddr.datagram * int
-    val close : t -> unit
-  end
-
-  type (_, _, _) Resource.pi +=
-    | Datagram_socket : ('t, (module DATAGRAM_SOCKET with type t = 't), [> _ datagram_socket_ty]) Resource.pi
-
-  let datagram_socket (type t tag) (module X : DATAGRAM_SOCKET with type t = t and type tag = tag) =
-    Resource.handler @@
-    Resource.bindings (Flow.Pi.shutdown (module X)) @ [
-      H (Datagram_socket, (module X));
-      H (Resource.Close, X.close)
-    ]
-
-  module type LISTENING_SOCKET = sig
-    type t
-    type tag
-
-    val accept : t -> sw:Switch.t -> tag stream_socket_ty r * Sockaddr.stream
-    val close : t -> unit
-    val listening_addr : t -> Sockaddr.stream
-  end
-
-  type (_, _, _) Resource.pi +=
-    | Listening_socket : ('t, (module LISTENING_SOCKET with type t = 't and type tag = 'tag), [> 'tag listening_socket_ty]) Resource.pi
-
-  let listening_socket (type t tag) (module X : LISTENING_SOCKET with type t = t and type tag = tag) =
-    Resource.handler [
-      H (Resource.Close, X.close);
-      H (Listening_socket, (module X))
-    ]
-
-  module type NETWORK = sig
-    type t
-    type tag
-
-    val listen : t -> reuse_addr:bool -> reuse_port:bool -> backlog:int -> sw:Switch.t -> Sockaddr.stream -> tag listening_socket_ty r
-    val connect : t -> sw:Switch.t -> Sockaddr.stream -> tag stream_socket_ty r
-    val datagram_socket :
-      t
-      -> reuse_addr:bool
-      -> reuse_port:bool
-      -> sw:Switch.t
-      -> [Sockaddr.datagram | `UdpV4 | `UdpV6]
-      -> tag datagram_socket_ty r
-
-    val getaddrinfo : t -> service:string -> string -> Sockaddr.t list
-    val getnameinfo : t -> Sockaddr.t -> (string * string)
-  end
-
-  type (_, _, _) Resource.pi +=
-    | Network : ('t, (module NETWORK with type t = 't and type tag = 'tag), [> 'tag ty]) Resource.pi
-
-  let network (type t tag) (module X : NETWORK with type t = t and type tag = tag) =
-    Resource.handler [
-      H (Network, (module X));
-    ]
-end
-
-let accept ~sw (type tag) (Resource.T (t, ops) : [> tag listening_socket_ty] r) =
-  let module X = (val (Resource.get ops Pi.Listening_socket)) in
+let accept (type a) ~sw ((t, ops) : (a, _) Listening_socket.t) =
+  let module X = (val ops#listening_socket) in
   X.accept t ~sw
 
-let accept_fork ~sw (t : [> 'a listening_socket_ty] r) ~on_error handle =
+let accept_fork ~sw (t : _ Listening_socket.t) ~on_error { connection_handler } =
   let child_started = ref false in
-  let flow, addr = accept ~sw t in
-  Fun.protect ~finally:(fun () -> if !child_started = false then Flow.close flow)
+  let (Stream_socket.T flow, addr) = accept ~sw t in
+  Fun.protect ~finally:(fun () -> if !child_started = false then Stream_socket.close flow)
     (fun () ->
        Fiber.fork ~sw (fun () ->
-           match child_started := true; handle (flow :> 'a stream_socket_ty r) addr with
-           | x -> Flow.close flow; x
+           match child_started := true; connection_handler flow addr with
+           | x -> Stream_socket.close flow; x
            | exception (Cancel.Cancelled _ as ex) ->
-             Flow.close flow;
+             Stream_socket.close flow;
              raise ex
            | exception ex ->
-             Flow.close flow;
+             Stream_socket.close flow;
              on_error (Exn.add_context ex "handling connection from %a" Sockaddr.pp addr)
          )
     )
 
-let listening_addr (type tag) (Resource.T (t, ops) : [> tag listening_socket_ty] r) =
-  let module X = (val (Resource.get ops Pi.Listening_socket)) in
+let listening_addr (type a) ((t, ops) : (a, _) Listening_socket.t) =
+  let module X = (val ops#listening_socket) in
   X.listening_addr t
 
-let send (Resource.T (t, ops)) ?dst bufs =
-  let module X = (val (Resource.get ops Pi.Datagram_socket)) in
+let send (type a) ((t, ops) : (a, _) Datagram_socket.t) ?dst bufs =
+  let module X = (val ops#datagram_socket) in
   X.send t ?dst bufs
 
-let recv (Resource.T (t, ops)) buf =
-  let module X = (val (Resource.get ops Pi.Datagram_socket)) in
+let recv (type a) ((t, ops) : (a, _) Datagram_socket.t) buf =
+  let module X = (val ops#datagram_socket) in
   X.recv t buf
 
-let listen (type tag) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw (t:[> tag ty] r) =
-  let (Resource.T (t, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Network)) in
+let listen (type a) ?(reuse_addr=false) ?(reuse_port=false) ~backlog ~sw ((t, ops) : (a, _) t) =
+  let module X = (val ops#network) in
   X.listen t ~reuse_addr ~reuse_port ~backlog ~sw
 
-let connect (type tag) ~sw (t:[> tag ty] r) addr =
-  let (Resource.T (t, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Network)) in
+let connect (type a) ~sw ((t, ops) : (a, _) t) addr =
+  let module X = (val ops#network) in
   try X.connect t ~sw addr
   with Exn.Io _ as ex ->
     let bt = Printexc.get_raw_backtrace () in
     Exn.reraise_with_context ex bt "connecting to %a" Sockaddr.pp addr
 
-let datagram_socket (type tag) ?(reuse_addr=false) ?(reuse_port=false) ~sw (t:[> tag ty] r) addr =
-  let (Resource.T (t, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Network)) in
-  let addr = (addr :> [Sockaddr.datagram | `UdpV4 | `UdpV6]) in 
+let datagram_socket (type a) ?(reuse_addr=false) ?(reuse_port=false) ~sw ((t, ops) : (a, _) t) addr =
+  let module X = (val ops#network) in
+  let addr = (addr :> [Sockaddr.datagram | `UdpV4 | `UdpV6]) in
   X.datagram_socket t ~reuse_addr ~reuse_port ~sw addr
 
-let getaddrinfo (type tag) ?(service="") (t:[> tag ty] r) hostname =
-  let (Resource.T (t, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Network)) in
+let getaddrinfo (type a) ?(service="") ((t, ops) : (a, _) t) hostname =
+  let module X = (val ops#network) in
   X.getaddrinfo t ~service hostname
 
 let getaddrinfo_stream ?service t hostname =
@@ -328,12 +143,11 @@ let getaddrinfo_datagram ?service t hostname =
       | _ -> None
     )
 
-let getnameinfo (type tag) (t:[> tag ty] r) sockaddr =
-  let (Resource.T (t, ops)) = t in
-  let module X = (val (Resource.get ops Pi.Network)) in
+let getnameinfo (type a) ((t, ops) : (a, _) t) sockaddr =
+  let module X = (val ops#network) in
   X.getnameinfo t sockaddr
 
-let close = Resource.close
+let close = Closable.close
 
 let with_tcp_connect ?(timeout=Time.Timeout.none) ~host ~service t f =
   Switch.run ~name:"with_tcp_connect" @@ fun sw ->
@@ -360,13 +174,13 @@ let with_tcp_connect ?(timeout=Time.Timeout.none) ~host ~service t f =
     Exn.reraise_with_context ex bt "connecting to %S:%s" host service
 
 (* Run a server loop in a single domain. *)
-let run_server_loop ~sw ~connections ~on_error ~stop listening_socket connection_handler =
+let run_server_loop ~sw ~connections ~on_error ~stop listening_socket { connection_handler } =
   let rec accept () =
     Semaphore.acquire connections;
-    accept_fork ~sw ~on_error listening_socket (fun conn addr ->
+    accept_fork ~sw ~on_error listening_socket { connection_handler = (fun conn addr ->
         Fun.protect (fun () -> connection_handler conn addr)
             ~finally:(fun () -> Semaphore.release connections)
-      );
+      )};
     accept ()
   in
   match stop with

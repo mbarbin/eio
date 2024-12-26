@@ -9,7 +9,7 @@
     ]}
 *)
 
-open Std
+open! Std
 
 type t
 (** An input buffer. *)
@@ -23,7 +23,7 @@ type 'a parser = t -> 'a
     @raise End_of_file The flow ended without enough data to parse an ['a].
     @raise Buffer_limit_exceeded Parsing the value would exceed the configured size limit. *)
 
-val parse : ?initial_size:int -> max_size:int -> 'a parser -> _ Flow.source -> ('a, [> `Msg of string]) result
+val parse : ?initial_size:int -> max_size:int -> 'a parser -> _ Flow.Source.t -> ('a, [> `Msg of string]) result
 (** [parse p flow ~max_size] uses [p] to parse everything in [flow].
 
     It is a convenience function that does
@@ -34,7 +34,7 @@ val parse : ?initial_size:int -> max_size:int -> 'a parser -> _ Flow.source -> (
 
     @param initial_size see {!of_flow}. *)
 
-val parse_exn : ?initial_size:int -> max_size:int -> 'a parser -> _ Flow.source -> 'a
+val parse_exn : ?initial_size:int -> max_size:int -> 'a parser -> _ Flow.Source.t -> 'a
 (** [parse_exn] wraps {!parse}, but raises [Failure msg] if that returns [Error (`Msg msg)].
 
     Catching exceptions with [parse] and then raising them might seem pointless,
@@ -70,7 +70,9 @@ val of_buffer : Cstruct.buffer -> t
 val of_string : string -> t
 (** [of_string s] is a reader that reads from [s]. *)
 
-val as_flow : t -> Flow.source_ty r
+type as_flow
+
+val as_flow : t -> as_flow Flow.Source.t'
 (** [as_flow t] is a buffered flow.
 
     Reading from it will return data from the buffer,

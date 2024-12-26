@@ -40,8 +40,6 @@ let get_dir_fd_opt (Eio.Resource.T (t, ops)) =
 
 
 module Datagram_socket = struct
-  type tag = [`Generic | `Unix]
-
   type t = Eio_unix.Fd.t
 
   let fd t = t
@@ -64,15 +62,12 @@ module Datagram_socket = struct
     | `All -> Unix.SHUTDOWN_ALL
 end
 
-let datagram_handler = Eio_unix.Pi.datagram_handler (module Datagram_socket)
-
 let datagram_socket fd =
-  Eio.Resource.T (fd, datagram_handler)
+  Eio_unix.Net.Datagram_socket.T
+    (Eio_unix.Net.Datagram_socket.make (module Datagram_socket) fd)
 
 module Listening_socket = struct
   type t = Fd.t
-
-  type tag = [`Generic | `Unix]
 
   let fd t = t
 
@@ -85,7 +80,7 @@ module Listening_socket = struct
       | Unix.ADDR_UNIX path         -> `Unix path
       | Unix.ADDR_INET (host, port) -> `Tcp (Eio_unix.Net.Ipaddr.of_unix host, port)
     in
-    let flow = (Flow.of_fd client :> _ Eio.Net.stream_socket) in
+    let flow = (Flow.of_fd client |> Eio_unix.Flow.Cast.as_unix_stream_socket) in
     flow, client_addr
 
   let listening_addr fd =
@@ -93,10 +88,9 @@ module Listening_socket = struct
       (fun fd -> Eio_unix.Net.sockaddr_of_unix_stream (Unix.getsockname fd))
 end
 
-let listening_handler = Eio_unix.Pi.listening_socket_handler (module Listening_socket)
-
 let listening_socket fd =
-  Eio.Resource.T (fd, listening_handler)
+  Eio_unix.Net.Listening_socket.T
+    (Eio_unix.Net.Listening_socket.make (module Listening_socket) fd)
 
 let socket_domain_of = function
   | `Unix _ -> Unix.PF_UNIX
@@ -113,11 +107,10 @@ let connect ~sw connect_addr =
   let sock_unix = Unix.socket ~cloexec:true (socket_domain_of connect_addr) Unix.SOCK_STREAM 0 in
   let sock = Fd.of_unix ~sw ~seekable:false ~close_unix:true sock_unix in
   Low_level.connect sock addr;
-  (Flow.of_fd sock :> _ Eio_unix.Net.stream_socket)
+  (Flow.of_fd sock |> Eio_unix.Flow.Cast.as_unix_stream_socket)
 
 module Impl = struct
   type t = unit
-  type tag = [`Unix | `Generic]
 
   let listen () ~reuse_addr ~reuse_port ~backlog ~sw listen_addr =
     if reuse_addr then (
@@ -146,9 +139,9 @@ module Impl = struct
       Unix.setsockopt sock_unix Unix.SO_REUSEPORT true;
     Unix.bind sock_unix addr;
     Unix.listen sock_unix backlog;
-    (listening_socket sock :> _ Eio.Net.listening_socket_ty r)
+    listening_socket sock
 
-  let connect () ~sw addr = (connect ~sw addr :> [`Generic | `Unix] Eio.Net.stream_socket_ty r)
+  let connect () ~sw addr = connect ~sw addr
 
   let datagram_socket () ~reuse_addr ~reuse_port ~sw saddr =
     if reuse_addr then (
@@ -173,21 +166,19 @@ module Impl = struct
       Unix.bind sock_unix addr
     | `UdpV4 | `UdpV6 -> ()
     end;
-    (datagram_socket sock :> [`Generic | `Unix] Eio.Net.datagram_socket_ty r)
+    datagram_socket sock
 
   let getaddrinfo () = Low_level.getaddrinfo
   let getnameinfo () = Eio_unix.Net.getnameinfo
 end
 
 let net =
-  let handler = Eio.Net.Pi.network (module Impl) in
-  Eio.Resource.T ((), handler)
+  Eio_unix.Net.T (Eio_unix.Net.Pi.make (module Impl) ())
 
 type stdenv = Eio_unix.Stdenv.base
 
 module Process_impl = struct
   type t = Low_level.Process.t
-  type tag = [ `Generic | `Unix ]
 
   let pid = Low_level.Process.pid
 
@@ -201,8 +192,8 @@ module Process_impl = struct
 end
 
 let process =
-  let handler = Eio.Process.Pi.process (module Process_impl) in
-  fun proc -> Eio.Resource.T (proc, handler)
+  let ops = Eio_unix.Process.Pi.process (module Process_impl) in
+  fun proc -> Eio_unix.Process.T (ops proc)
 
 (* fchdir wants just a directory FD, not an FD and a path like the *at functions. *)
 let with_dir dir_fd path fn =
@@ -217,8 +208,8 @@ let with_dir dir_fd path fn =
 
 module Process_mgr = struct
   module T = struct
-    type t = unit 
-    
+    type t = unit
+
     let spawn_unix () ~sw ?cwd ~env ~fds ~executable args =
       let actions = Low_level.Process.Fork_action.[
           Eio_unix.Private.Fork_action.inherit_fds fds;
@@ -226,7 +217,7 @@ module Process_mgr = struct
       ] in
       let with_actions cwd fn = match cwd with
         | None -> fn actions
-        | Some (fd, s) ->
+        | Some (Eio.Path.Path (fd, s)) ->
           match get_dir_fd_opt fd with
           | None -> Fmt.invalid_arg "cwd is not an OS directory!"
           | Some dir_fd ->
@@ -240,9 +231,9 @@ module Process_mgr = struct
   include Eio_unix.Process.Make_mgr (T)
 end
 
-let process_mgr : Eio_unix.Process.mgr_ty r =
-  let h = Eio_unix.Process.Pi.mgr_unix (module Process_mgr) in
-  Eio.Resource.T ((), h)
+let process_mgr : Eio_unix.Process.mgr_r =
+  Eio_unix.Process.Mgr
+    (Eio_unix.Process.Pi.mgr_unix (module Process_mgr) ())
 
 let wrap_backtrace fn x =
   match fn x with
@@ -292,8 +283,8 @@ module Domain_mgr = struct
 end
 
 let domain_mgr ~run_event_loop =
-  let handler = Eio.Domain_manager.Pi.mgr (module Domain_mgr) in
-  Eio.Resource.T (Domain_mgr.make ~run_event_loop, handler)
+  Eio.Domain_manager.Pi.make (module Domain_mgr)
+    (Domain_mgr.make ~run_event_loop)
 
 module Mono_clock = struct
   type t = unit
@@ -347,7 +338,7 @@ end = struct
         ~flags:Uring.Open_flags.cloexec
         ~perm:0
     in
-    (Flow.of_fd fd :> Eio.File.ro_ty r)
+    (Flow.of_fd fd |> Eio_unix.Flow.Cast.as_file_ro)
 
   let open_out t ~sw ~append ~create path =
     let perm, flags =
@@ -363,7 +354,7 @@ end = struct
         ~flags:Uring.Open_flags.(cloexec + flags)
         ~perm
     in
-    (Flow.of_fd fd :> Eio.File.rw_ty r)
+    (Flow.of_fd fd |> Eio_unix.Flow.Cast.as_file_rw)
 
   let native_internal t path =
     if Filename.is_relative path then (
@@ -475,23 +466,26 @@ end
 let dir ~label ~path fd = Eio.Resource.T (Dir.v ~label ~path fd, Dir_handler.v)
 
 let stdenv ~run_event_loop =
-  let fs = (dir ~label:"fs" ~path:"" Fs, "") in
-  let cwd = (dir ~label:"cwd" ~path:"" Cwd, "") in
-  object (_ : stdenv)
-    method stdin  = Flow.stdin
-    method stdout = Flow.stdout
-    method stderr = Flow.stderr
+  let fs = Eio.Path.Path (dir ~label:"fs" ~path:"" Fs, "") in
+  let cwd = Eio.Path.Path (dir ~label:"cwd" ~path:"" Cwd, "") in
+  let stdin = Flow.stdin |> Eio_unix.Source.Cast.as_generic in
+  let stdout = Flow.stdout |> Eio_unix.Sink.Cast.as_generic in
+  let stderr = Flow.stderr |> Eio_unix.Sink.Cast.as_generic in
+  (object
+    method stdin  = stdin
+    method stdout = stdout
+    method stderr = stderr
     method net = net
     method process_mgr = process_mgr
     method domain_mgr = domain_mgr ~run_event_loop
     method clock = clock
     method mono_clock = mono_clock
-    method fs = (fs :> Eio.Fs.dir_ty Eio.Path.t)
-    method cwd = (cwd :> Eio.Fs.dir_ty Eio.Path.t)
+    method fs = (fs :> Eio.Path.t)
+    method cwd = (cwd :> Eio.Path.t)
     method secure_random = Flow.secure_random
     method debug = Eio.Private.Debug.v
     method backend_id = "linux"
-  end
+  end)
 
 let run_event_loop (type a) ?fallback config (main : _ -> a) arg : a =
   Sched.with_sched ?fallback config @@ fun st ->
@@ -502,7 +496,7 @@ let run_event_loop (type a) ?fallback config (main : _ -> a) arg : a =
       | Eio_unix.Private.Get_monotonic_clock -> Some (fun k -> continue k mono_clock)
       | Eio_unix.Net.Import_socket_stream (sw, close_unix, fd) -> Some (fun k ->
           let fd = Fd.of_unix ~sw ~seekable:false ~close_unix fd in
-          continue k (Flow.of_fd fd :> _ Eio_unix.Net.stream_socket)
+          continue k (Flow.of_fd fd |> Eio_unix.Flow.Cast.as_unix_stream_socket)
         )
       | Eio_unix.Net.Import_socket_listening (sw, close_unix, fd) -> Some (fun k ->
           let fd = Fd.of_unix ~sw ~seekable:false ~close_unix fd in
@@ -517,7 +511,7 @@ let run_event_loop (type a) ?fallback config (main : _ -> a) arg : a =
             let a, b = Unix.socketpair ~cloexec:true domain Unix.SOCK_STREAM protocol in
             let a = Fd.of_unix ~sw ~seekable:false ~close_unix:true a |> Flow.of_fd in
             let b = Fd.of_unix ~sw ~seekable:false ~close_unix:true b |> Flow.of_fd in
-            ((a :> _ Eio_unix.Net.stream_socket), (b :> _ Eio_unix.Net.stream_socket))
+            ((a |> Eio_unix.Flow.Cast.as_unix_stream_socket), (b |> Eio_unix.Flow.Cast.as_unix_stream_socket))
           with
           | r -> continue k r
           | exception Unix.Unix_error (code, name, arg) ->
@@ -528,7 +522,7 @@ let run_event_loop (type a) ?fallback config (main : _ -> a) arg : a =
             let a, b = Unix.socketpair ~cloexec:true domain Unix.SOCK_DGRAM protocol in
             let a = Fd.of_unix ~sw ~seekable:false ~close_unix:true a |> datagram_socket in
             let b = Fd.of_unix ~sw ~seekable:false ~close_unix:true b |> datagram_socket in
-            ((a :> _ Eio_unix.Net.datagram_socket), (b :> _ Eio_unix.Net.datagram_socket))
+            (a, b)
           with
           | r -> continue k r
           | exception Unix.Unix_error (code, name, arg) ->
@@ -537,8 +531,8 @@ let run_event_loop (type a) ?fallback config (main : _ -> a) arg : a =
       | Eio_unix.Private.Pipe sw -> Some (fun k ->
           match
             let r, w = Low_level.pipe ~sw in
-            let r = (Flow.of_fd r :> _ Eio_unix.source) in
-            let w = (Flow.of_fd w :> _ Eio_unix.sink) in
+            let r = (Flow.of_fd r |> Eio_unix.Flow.Cast.as_unix_source) in
+            let w = (Flow.of_fd w |> Eio_unix.Flow.Cast.as_unix_sink) in
             (r, w)
           with
           | r -> continue k r

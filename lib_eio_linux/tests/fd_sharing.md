@@ -10,7 +10,8 @@ open Eio.Std
 
 # Tests
 
-One domain closes an FD after another domain has enqueued a uring operation mentioning it.
+One domain closes an FD after another domain has enqueued a uring operation
+mentioning it.
 
 ```ocaml
 # Eio_linux.run @@ fun env ->
@@ -18,7 +19,7 @@ One domain closes an FD after another domain has enqueued a uring operation ment
   Switch.run @@ fun sw ->
   let m = Mutex.create () in
   Mutex.lock m;
-  let r, w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T r, Eio_unix.Sink.T w) = Eio_unix.pipe sw in
   let ready, set_ready = Promise.create () in
   Fiber.both
     (fun () ->
@@ -44,12 +45,12 @@ One domain closes an FD after another domain has enqueued a uring operation ment
     (fun () ->
        Promise.await ready;
        traceln "Domain 0 closing FD";
-       Eio.Flow.close r;
+       Eio_unix.Source.close r;
        Fiber.yield ();
        traceln "Domain 0 closed FD; waking domain 1";
        Mutex.unlock m;
        (* Allow the read to complete. *)
-       Eio.Flow.close w
+       Eio_unix.Sink.close w
     );;
 +Domain 1 enqueuing read on FD
 +Waiting for domain 0...

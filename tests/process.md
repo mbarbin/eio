@@ -20,7 +20,7 @@ let run ?clear:(paths = []) fn =
   Eio_main.run @@ fun env ->
   let cwd = Eio.Stdenv.cwd env in
   List.iter (fun p -> Eio.Path.rmtree ~missing_ok:true (cwd / p)) paths;
-  fn env#process_mgr env
+  fn env
 
 let status_to_string = Fmt.to_to_string Eio.Process.pp_status
 ```
@@ -28,9 +28,10 @@ let status_to_string = Fmt.to_to_string Eio.Process.pp_status
 Running a program as a subprocess:
 
 ```ocaml
-# run @@ fun mgr _env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   Switch.run @@ fun sw ->
-  let t = Process.spawn ~sw mgr [ "echo"; "hello world" ] in
+  let (Process.T t) = Process.spawn ~sw mgr [ "echo"; "hello world" ] in
   Process.await t;;
 hello world
 - : Process.exit_status = `Exited 0
@@ -39,9 +40,10 @@ hello world
 Stopping a subprocess works and checking the status waits and reports correctly:
 
 ```ocaml
-# run @@ fun mgr _env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   Switch.run @@ fun sw ->
-  let t = Process.spawn ~sw mgr [ "sleep"; "10" ] in
+  let (Process.T t) = Process.spawn ~sw mgr [ "sleep"; "10" ] in
   Process.signal t Sys.sigkill;
   Process.await t |> status_to_string
 - : string = "Exited (signal SIGKILL)"
@@ -50,8 +52,9 @@ Stopping a subprocess works and checking the status waits and reports correctly:
 A switch will stop a process when it is released:
 
 ```ocaml
-# run @@ fun mgr env ->
-  let proc = Switch.run (fun sw -> Process.spawn ~sw mgr [ "sleep"; "10" ]) in
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
+  let (Process.T proc) = Switch.run (fun sw -> Process.spawn ~sw mgr [ "sleep"; "10" ]) in
   Process.await proc |> status_to_string
 - : string = "Exited (signal SIGKILL)"
 ```
@@ -59,10 +62,11 @@ A switch will stop a process when it is released:
 Passing in flows allows you to redirect the child process' stdout:
 
 ```ocaml
-# run ~clear:["process-test.txt"] @@ fun mgr env ->
+# run ~clear:["process-test.txt"] @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   let fs = Eio.Stdenv.fs env in
   let path = fs / "process-test.txt" in
-  Eio.Path.(with_open_out ~create:(`Exclusive 0o600) path) @@ fun stdout ->
+  Eio.Path.(with_open_out ~create:(`Exclusive 0o600) path) @@ fun (Eio.File.Rw.T stdout) ->
   Process.run mgr ~stdout [ "echo"; "Hello" ];
   Eio.Path.(load path);;
 - : string = "Hello\n"
@@ -71,7 +75,8 @@ Passing in flows allows you to redirect the child process' stdout:
 Piping data to and from the child:
 
 ```ocaml
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   let stdin = Eio.Flow.string_source "one\ntwo\nthree\n" in
   Process.parse_out mgr Eio.Buf_read.line ~stdin ["wc"; "-l"] |> String.trim;;
 - : string = "3"
@@ -80,7 +85,8 @@ Piping data to and from the child:
 Spawning subprocesses in new domains works normally:
 
 ```ocaml
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   Eio.Domain_manager.run env#domain_mgr @@ fun () ->
   Process.run mgr [ "echo"; "Hello from another domain" ];;
 Hello from another domain
@@ -90,9 +96,10 @@ Hello from another domain
 Calling `await_exit` multiple times on the same spawn just returns the status:
 
 ```ocaml
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   Switch.run @@ fun sw ->
-  let t = Process.spawn ~sw mgr [ "echo"; "hello world" ] in
+  let (Process.T t) = Process.spawn ~sw mgr [ "echo"; "hello world" ] in
   (Process.await t, Process.await t, Process.await t);;
 hello world
 - : Process.exit_status * Process.exit_status * Process.exit_status =
@@ -102,7 +109,8 @@ hello world
 Using a sink that is not backed by a file descriptor:
 
 ```ocaml
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   let buf = Buffer.create 16 in
   Eio.Process.run mgr ~stdout:(Flow.buffer_sink buf) [ "echo"; "Hello, world" ];
   Buffer.contents buf
@@ -112,7 +120,8 @@ Using a sink that is not backed by a file descriptor:
 Changing directory (unconfined):
 
 ```ocaml
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   let root = env#fs / "/" in
   Process.run mgr ~cwd:root [ "env"; "pwd" ];;
 /
@@ -122,7 +131,8 @@ Changing directory (unconfined):
 Changing directory (confined):
 
 ```ocaml
-# run ~clear:["proc-sub-dir"] @@ fun mgr env ->
+# run ~clear:["proc-sub-dir"] @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   let cwd = Eio.Stdenv.cwd env in
   let subdir = cwd / "proc-sub-dir" in
   Eio.Path.mkdir subdir ~perm:0o700;
@@ -136,7 +146,8 @@ test-data
 Trying to access a path outside of the cwd:
 
 ```ocaml
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   Process.run mgr ~cwd:(env#cwd / "..") [ "cat"; "test-cwd" ];;
 Exception: Eio.Io Fs Permission_denied _
 ```
@@ -144,7 +155,8 @@ Exception: Eio.Io Fs Permission_denied _
 If a command fails, we get shown the arguments (quoted if necessary):
 
 ```ocaml
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   Process.run mgr ["bash"; "-c"; "exit 3"; ""; "foo"; "\"bar\""];;
 Exception:
 Eio.Io Process Child_error Exited (code 3),
@@ -154,11 +166,13 @@ Eio.Io Process Child_error Exited (code 3),
 Exit code success can be determined by is_success (Process.run):
 
 ```ocaml
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   Process.run ~is_success:(Int.equal 3) mgr ["bash"; "-c"; "exit 3"];;
 - : unit = ()
 
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   Process.run ~is_success:(Int.equal 3) mgr ["bash"; "-c"; "exit 0"];;
 Exception:
 Eio.Io Process Child_error Exited (code 0),
@@ -168,7 +182,8 @@ Eio.Io Process Child_error Exited (code 0),
 Exit code success can be determined by is_success (Process.parse_out):
 
 ```ocaml
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   Process.parse_out ~is_success:(Int.equal 5) mgr Eio.Buf_read.line ["sh"; "-c"; "echo 123; exit 5"];;
 - : string = "123"
 ```
@@ -176,7 +191,8 @@ Exit code success can be determined by is_success (Process.parse_out):
 The default environment:
 
 ```ocaml
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   Unix.putenv "DISPLAY" ":1";
   Process.parse_out mgr Eio.Buf_read.line ["sh"; "-c"; "echo $DISPLAY"];;
 - : string = ":1"
@@ -185,7 +201,8 @@ The default environment:
 A custom environment:
 
 ```ocaml
-# run @@ fun mgr env ->
+# run @@ fun env ->
+  let (Eio_unix.Process.Mgr mgr) = env#process_mgr in
   let env = [| "DISPLAY=:2" |] in
   Process.parse_out mgr Eio.Buf_read.line ["sh"; "-c"; "echo $DISPLAY"] ~env;;
 - : string = ":2"

@@ -1,6 +1,7 @@
 ```ocaml
 # #require "eio";;
 ```
+
 ```ocaml
 module R = Eio.Buf_read;;
 open R.Syntax;;
@@ -38,8 +39,7 @@ let mock_flow =
         next := (if x' = "" then xs else x' :: xs);
         len
   end in
-  let ops = Eio.Flow.Pi.source (module X) in
-  Eio.Resource.T ((), ops)
+  Eio.Flow.Source.make (module X) ()
 
 let read flow n =
   let buf = Cstruct.create n in
@@ -60,7 +60,6 @@ let parse_exn p flow ~max_size =
   | x -> traceln "Ok: %S" x
   | exception Failure msg -> traceln "Failure: %s" msg
 ```
-
 
 ## A simple run-through
 
@@ -95,6 +94,7 @@ val i : R.t = <abstr>
 ```
 
 The first read fills the initial buffer:
+
 ```ocaml
 # next := ["hello world!"]; ensure i 1;;
 +mock_flow returning 4 bytes
@@ -102,6 +102,7 @@ The first read fills the initial buffer:
 ```
 
 The next read forces a resize (doubling to 8):
+
 ```ocaml
 # ensure i 5;;
 +mock_flow returning 4 bytes
@@ -109,6 +110,7 @@ The next read forces a resize (doubling to 8):
 ```
 
 Now the buffer is at max-size (10):
+
 ```ocaml
 # ensure i 9;;
 +mock_flow returning 2 bytes
@@ -153,6 +155,7 @@ Exception: End_of_file.
 ## Multiple reads
 
 We might need several reads to fulfill the user's request:
+
 ```ocaml
 # let i = R.of_flow mock_flow ~initial_size:4 ~max_size:10;;
 val i : R.t = <abstr>
@@ -241,8 +244,7 @@ Exception: End_of_file.
 
 ```ocaml
 # let bflow = R.of_flow mock_flow ~max_size:100 |> R.as_flow;;
-val bflow : Eio__Flow.source_ty Eio.Std.r =
-  Eio__.Resource.T (<poly>, <abstr>)
+val bflow : R.as_flow Eio__.Flow.Source.t' = (<abstr>, <obj>)
 # next := ["foo"; "bar"]; read bflow 2;;
 +mock_flow returning 3 bytes
 +Read "fo"
@@ -398,6 +400,7 @@ Exception: Failure "skip_while1".
 ```
 
 ## Big Endian
+
 ```ocaml
 # R.parse_string_exn R.BE.uint16 "\128\001" |> Printf.sprintf "0x%x";;
 - : string = "0x8001"
@@ -414,6 +417,7 @@ Exception: Failure "skip_while1".
 ```
 
 ## Little Endian
+
 ```ocaml
 # R.parse_string_exn R.LE.uint16 "\128\001" |> Printf.sprintf "0x%x";;
 - : string = "0x180"

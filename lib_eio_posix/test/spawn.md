@@ -133,7 +133,7 @@ FOO=bar
 Inheriting file descriptors:
 
 ```ocaml
-let fd flow = Eio_unix.Resource.fd flow
+let fd flow = Eio_unix.Sink.fd flow
 let int_of_fd : Unix.file_descr -> int = Obj.magic
 let id flow = Eio_unix.Fd.use_exn "id" (fd flow) int_of_fd
 let read_all pipe =
@@ -144,7 +144,7 @@ let read_all pipe =
 ```ocaml
 # Eio_posix.run @@ fun _env ->
   Switch.run @@ fun sw ->
-  let pipe_r, pipe_w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T pipe_r, Eio_unix.Sink.T pipe_w) = Eio_unix.pipe sw in
   let child =
     Process.spawn ~sw Process.Fork_action.[
       inherit_fds [
@@ -168,10 +168,10 @@ Swapping FDs (note: plain sh can't handle multi-digit FDs!):
 ```ocaml
 # Eio_posix.run @@ fun _env ->
   Switch.run @@ fun sw ->
-  let pipe1_r, pipe1_w = Eio_unix.pipe sw in
-  let pipe2_r, pipe2_w = Eio_unix.pipe sw in
-  let pipe3_r, pipe3_w = Eio_unix.pipe sw in
-  let pipe4_r, pipe4_w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T pipe1_r, Eio_unix.Sink.T pipe1_w) = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T pipe2_r, Eio_unix.Sink.T pipe2_w) = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T pipe3_r, Eio_unix.Sink.T pipe3_w) = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T pipe4_r, Eio_unix.Sink.T pipe4_w) = Eio_unix.pipe sw in
   let child =
     Process.spawn ~sw Process.Fork_action.[
       inherit_fds [
@@ -213,7 +213,7 @@ Keeping an FD open:
 ```ocaml
 # Eio_posix.run @@ fun _env ->
   Switch.run @@ fun sw ->
-  let pipe1_r, pipe1_w = Eio_unix.pipe sw in
+  let (Eio_unix.Source.T pipe1_r, Eio_unix.Sink.T pipe1_w) = Eio_unix.pipe sw in
   let child =
     Process.spawn ~sw Process.Fork_action.[
       inherit_fds [

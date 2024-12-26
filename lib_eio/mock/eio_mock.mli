@@ -34,8 +34,6 @@
     ]}
 *)
 
-open Eio.Std
-
 (** {2 Configuration} *)
 
 (** Actions that can be performed by mock handlers. *)
@@ -86,63 +84,142 @@ end
 
 (** Mock {!Eio.Flow} sources and sinks. *)
 module Flow : sig
+  module Mock_flow : sig
+    type t
+  end
+
   type copy_method = [
     | `Read_into                (** Use the source's [read_into] method (the default). *)
     | `Read_source_buffer       (** Use the {!Eio.Flow.Read_source_buffer} optimisation. *)
   ]
 
-  type ty = [`Generic | `Mock] Eio.Net.stream_socket_ty
-  type t = ty r
+  class type ['a] flow = object
+    method raw : 'a -> Mock_flow.t
+    method shutdown : (module Eio.Flow.SHUTDOWN with type t = 'a)
+    method source : (module Eio.Flow.SOURCE with type t = 'a)
+    method sink : (module Eio.Flow.SINK with type t = 'a)
+    method close : 'a -> unit
+    method resource_store : 'a Eio.Resource_store.t
+  end
 
-  val make : ?pp:string Fmt.t -> string -> t
+  type ('a, 'r) t =
+    ('a *
+     (< raw : 'a -> Mock_flow.t
+      ; shutdown : (module Eio.Flow.SHUTDOWN with type t = 'a)
+      ; source : (module Eio.Flow.SOURCE with type t = 'a)
+      ; sink : (module Eio.Flow.SINK with type t = 'a)
+      ; close : 'a -> unit
+      ; resource_store : 'a Eio.Resource_store.t
+      ; ..> as 'r))
+
+  type 'a t' = ('a, 'a flow) t
+
+  type r = T : 'a t' -> r [@@unboxed]
+
+  val make : ?pp:string Fmt.t -> string -> Mock_flow.t t'
   (** [make label] is a mock Eio flow.
       It can be used as a source, sink, or two-way flow.
       @param pp Printer to use to display the data. *)
 
-  val on_read : t -> string Handler.actions -> unit
+  val on_read : _ t -> string Handler.actions -> unit
   (** [on_read t actions] configures the values to return from the mock's [read] function. *)
 
-  val on_copy_bytes : t -> int Handler.actions -> unit
+  val on_copy_bytes : _ t -> int Handler.actions -> unit
   (** [on_copy_bytes t actions] configures the number of bytes to copy in each iteration. *)
 
-  val set_copy_method : t -> copy_method -> unit
+  val set_copy_method : _ t -> copy_method -> unit
   (** [set_copy_method t m] configures [t] to use the given method to read from
       a source during a copy operation. *)
+
+  val close : _ t -> unit
+
+  module Cast : sig
+    val as_stream_socket : r -> Eio.Net.Stream_socket.r
+  end
 end
 
 (** Mock {!Eio.Net} networks and sockets. *)
 module Net : sig
-  type t = [`Generic | `Mock] Eio.Net.ty r
+  module Impl : sig
+    type t
+  end
 
-  type listening_socket = [`Generic | `Mock] Eio.Net.listening_socket_ty r
+  module Listening_socket_impl : sig
+    type t
+  end
 
-  val make : string -> t
+  class type ['a] network = object
+    method network : (module Eio.Net.NETWORK with type t = 'a)
+    method raw : 'a -> Impl.t
+  end
+
+  type ('a, 'r) t =
+    ('a *
+     (< network : (module Eio.Net.NETWORK with type t = 'a)
+      ; raw : 'a -> Impl.t
+      ; ..> as 'r))
+
+  type 'a t' = ('a, 'a network) t
+
+  type r = T : 'a t' -> r [@@unboxed]
+
+  module Listening_socket : sig
+    class type ['a] listening_socket = object
+      method listening_socket : (module Eio.Net.Listening_socket.S with type t = 'a)
+      method close : 'a -> unit
+      method resource_store : 'a Eio.Resource_store.t
+      method raw : 'a -> Listening_socket_impl.t
+    end
+
+    type ('a, 'r) t =
+      ('a *
+       (< listening_socket : (module Eio.Net.Listening_socket.S with type t = 'a)
+        ; close : 'a -> unit
+        ; resource_store : 'a Eio.Resource_store.t
+        ; raw : 'a -> Listening_socket_impl.t
+        ; ..> as 'r))
+
+    type 'a t' = ('a, 'a listening_socket) t
+
+    type r = T : 'a t' -> r
+
+    module Cast : sig
+      val as_generic : r -> Eio.Net.Listening_socket.r
+    end
+  end
+
+  val make : string -> Impl.t t'
   (** [make label] is a new mock network. *)
 
-  val on_connect : t -> _ Eio.Net.stream_socket Handler.actions -> unit
+  val on_connect : _ t -> _ Eio.Net.Stream_socket.t Handler.actions -> unit
   (** [on_connect t actions] configures what to do when a client tries to connect somewhere. *)
 
-  val on_listen : t -> _ Eio.Net.listening_socket Handler.actions -> unit
+  val on_listen : _ t -> _ Eio.Net.Listening_socket.t Handler.actions -> unit
   (** [on_listen t actions] configures what to do when a server starts listening for incoming connections. *)
 
-  val on_datagram_socket : t -> _ Eio.Net.datagram_socket Handler.actions -> unit
+  val on_datagram_socket : _ t -> _ Eio.Net.Datagram_socket.t Handler.actions -> unit
   (** [on_datagram_socket t actions] configures how to create datagram sockets. *)
 
-  val on_getaddrinfo : t -> Eio.Net.Sockaddr.t list Handler.actions -> unit
+  val on_getaddrinfo : _ t -> Eio.Net.Sockaddr.t list Handler.actions -> unit
 
-  val on_getnameinfo : t -> (string * string) Handler.actions -> unit
+  val on_getnameinfo : _ t -> (string * string) Handler.actions -> unit
 
   val listening_socket :
-    ?listening_addr:Eio.Net.Sockaddr.stream -> string -> listening_socket
+    ?listening_addr:Eio.Net.Sockaddr.stream -> string
+    -> Listening_socket_impl.t Listening_socket.t'
   (** [listening_socket label] can be configured to provide mock connections.
 
       If [listening_addr] is not provided, a dummy value will be reported. *)
 
   val on_accept :
-    listening_socket ->
-    (Flow.t * Eio.Net.Sockaddr.stream) Handler.actions ->
+    _ Listening_socket.t ->
+    (_ Flow.t * Eio.Net.Sockaddr.stream) Handler.actions ->
     unit
   (** [on_accept socket actions] configures how to respond when the server calls "accept". *)
+
+  module Cast : sig
+    val as_generic : r -> Eio.Net.r
+  end
 end
 
 (** A mock {!Eio.Time} clock for testing timeouts. *)

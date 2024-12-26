@@ -19,8 +19,6 @@
    On FreeBSD we use O_RESOLVE_BENEATH and let the OS handle everything for us.
    On other systems we resolve one path component at a time. *)
 
-open Eio.Std
-
 module Fd = Eio_unix.Fd
 
 (* When renaming, we get a plain [Eio.Fs.dir]. We need extra access to check
@@ -51,7 +49,7 @@ end = struct
 
   let open_in t ~sw path =
     let fd = Err.run (Low_level.openat ~mode:0 ~sw t.fd path) Low_level.Open_flags.rdonly in
-    (Flow.of_fd fd :> Eio.File.ro_ty Eio.Resource.t)
+    Flow.of_fd fd |> Eio_unix.Flow.Cast.as_file_ro
 
   let open_out t ~sw ~append ~create path =
     let mode, flags =
@@ -64,7 +62,7 @@ end = struct
     let flags = if append then Low_level.Open_flags.(flags + append) else flags in
     let flags = Low_level.Open_flags.(flags + rdwr) in
     match Low_level.openat ~sw ~mode t.fd path flags with
-    | fd -> (Flow.of_fd fd :> Eio.File.rw_ty r)
+    | fd -> Flow.of_fd fd |> Eio_unix.Flow.Cast.as_file_rw
     | exception Unix.Unix_error (code, name, arg) ->
       raise (Err.wrap code name arg)
 

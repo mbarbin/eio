@@ -7,7 +7,6 @@
 ```
 
 ```ocaml
-
 module Int63 = Optint.Int63
 module Path = Eio.Path
 
@@ -256,7 +255,7 @@ Creating directories with nesting, symlinks, etc:
 
 ```ocaml
 let fake_dir : Eio.Fs.dir_ty r = Eio.Resource.T ((), Eio.Resource.handler [])
-let split path = Eio.Path.split (fake_dir, path) |> Option.map (fun ((_, dirname), basename) -> dirname, basename)
+let split path = Eio.Path.split' (fake_dir, path) |> Option.map (fun ((_, dirname), basename) -> dirname, basename)
 ```
 
 ```ocaml
@@ -544,7 +543,7 @@ Create a sandbox, write a file with it, then read it from outside:
     Eio.Exn.Backend.show := succeeds;
     try
       Switch.run @@ fun sw ->
-      let _ : _ Path.t = Path.open_dir ~sw path in
+      let _ : Path.t = Path.open_dir ~sw path in
       traceln "open_dir %a -> OK" Path.pp path
     with ex ->
       traceln "@[<h>%a@]" Eio.Exn.pp ex
@@ -580,8 +579,8 @@ Create a sandbox, write a file with it, then read it from outside:
 
 # Unconfined FS access
 
-We create a directory and chdir into it.
-Using `cwd` we can't access the parent, but using `fs` we can:
+We create a directory and chdir into it. Using `cwd` we can't access the parent,
+but using `fs` we can:
 
 ```ocaml
 # run ~clear:["fs-test"; "outside-cwd"] @@ fun env ->
@@ -657,10 +656,12 @@ Can use `fs` to access absolute paths:
   let cwd = Eio.Stdenv.cwd env in
   let fs = Eio.Stdenv.fs env in
   let b = Buffer.create 10 in
-  Path.with_open_in (fs / Filename.null) (fun flow -> Eio.Flow.copy flow (Eio.Flow.buffer_sink b));
+  Path.with_open_in (fs / Filename.null) (fun (Eio.File.Ro.T flow) ->
+    Eio.Flow.copy flow (Eio.Flow.buffer_sink b));
   traceln "Read %S and got %S" Filename.null (Buffer.contents b);
   traceln "Trying with cwd instead fails:";
-  Path.with_open_in (cwd / Filename.null) (fun flow -> Eio.Flow.copy flow (Eio.Flow.buffer_sink b));;;
+  Path.with_open_in (cwd / Filename.null) (fun (Eio.File.Ro.T flow) ->
+    Eio.Flow.copy flow (Eio.Flow.buffer_sink b));;;
 +Read "/dev/null" and got ""
 +Trying with cwd instead fails:
 Exception: Eio.Io Fs Permission_denied _,
@@ -712,8 +713,8 @@ We can get the Unix FD from the flow and use it directly:
 ```ocaml
 # run @@ fun env ->
   let fs = Eio.Stdenv.fs env in
-  Path.with_open_in (fs / Filename.null) (fun flow ->
-     match Eio_unix.Resource.fd_opt flow with
+  Path.with_open_in (fs / Filename.null) (fun (Eio.File.Ro.T flow) ->
+     match Eio.File.Ro.find_store flow Eio_unix.Fd.key with
      | None -> failwith "No Unix file descriptor!"
      | Some fd ->
         Eio_unix.Fd.use_exn "read" fd @@ fun fd ->
@@ -724,14 +725,14 @@ We can get the Unix FD from the flow and use it directly:
 - : unit = ()
 ```
 
-We can also remove it from the flow completely and take ownership of it.
-In that case, `with_open_in` will no longer close it on exit:
+We can also remove it from the flow completely and take ownership of it. In that
+case, `with_open_in` will no longer close it on exit:
 
 ```ocaml
 # run @@ fun env ->
   let fs = Eio.Stdenv.fs env in
-  let fd = Path.with_open_in (fs / Filename.null) (fun flow ->
-    Option.get (Eio_unix.Fd.remove (Option.get (Eio_unix.Resource.fd_opt flow)))
+  let fd = Path.with_open_in (fs / Filename.null) (fun (Eio.File.Ro.T flow) ->
+    Option.get (Eio_unix.Fd.remove (Option.get (Eio.File.Ro.find_store flow Eio_unix.Fd.key)))
   ) in
   let got = Unix.read fd (Bytes.create 10) 0 10 in
   traceln "Read %d bytes from null device" got;
@@ -873,7 +874,7 @@ Check reading and writing vectors at arbitrary offsets:
 # run ~clear:["test.txt"] @@ fun env ->
   let cwd = Eio.Stdenv.cwd env in
   let path = cwd / "test.txt" in
-  Path.with_open_out path ~create:(`Exclusive 0o600) @@ fun file ->
+  Path.with_open_out path ~create:(`Exclusive 0o600) @@ fun (Eio.File.Rw.T file) ->
   Eio.Flow.copy_string "+-!" file;
   Eio.File.pwrite_all file ~file_offset:(Int63.of_int 2) Cstruct.[of_string "abc"; of_string "123"];
   let buf1 = Cstruct.create 3 in
@@ -890,7 +891,7 @@ Reading at the end of a file:
 # run @@ fun env ->
   let cwd = Eio.Stdenv.cwd env in
   let path = cwd / "test.txt" in
-  Path.with_open_out path ~create:(`Or_truncate 0o600) @@ fun file ->
+  Path.with_open_out path ~create:(`Or_truncate 0o600) @@ fun (Eio.File.Rw.T file) ->
   Eio.Flow.copy_string "abc" file;
   let buf = Cstruct.create 10 in
   let got = Eio.File.pread file [buf] ~file_offset:(Int63.of_int 0) in
@@ -911,7 +912,7 @@ Ensure reads can be cancelled promptly, even if there is no need to wait:
 
 ```ocaml
 # run @@ fun env ->
-  Eio.Path.with_open_out (env#fs / "/dev/zero") ~create:`Never @@ fun null ->
+  Eio.Path.with_open_out (env#fs / "/dev/zero") ~create:`Never @@ fun (Eio.File.Rw.T null) ->
   Fiber.both
      (fun () ->
         let buf = Cstruct.create 4 in
@@ -970,7 +971,8 @@ Exception: Failure "Simulated error".
 
 ```ocaml
 # run @@ fun env ->
-  Eio.Path.with_open_out (env#cwd / "seek-test") ~create:(`If_missing 0o700) @@ fun file ->
+  Eio.Path.with_open_out (env#cwd / "seek-test") ~create:(`If_missing 0o700)
+  @@ fun (Eio.File.Rw.T file) ->
   Eio.File.truncate file (Int63.of_int 10);
   assert ((Eio.File.stat file).size = (Int63.of_int 10));
   let pos = Eio.File.seek file (Int63.of_int 3) `Set in
@@ -990,8 +992,10 @@ Exception: Failure "Simulated error".
 
 ```ocaml
 # run @@ fun env ->
-  let base = fst env#cwd in
-  List.iter (fun (a, b) -> traceln "%S / %S = %S" a b (snd ((base, a) / b))) [
+  let (Path.Path (base, _)) = env#cwd in
+  List.iter (fun (a, b) ->
+    let (Path.Path (_, p)) = Path.Path (base, a) / b in
+    traceln "%S / %S = %S" a b p) [
     "foo", "bar";
     "foo/", "bar";
     "foo", "/bar";

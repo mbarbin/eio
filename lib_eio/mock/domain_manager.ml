@@ -27,9 +27,8 @@ module Fake_domain_mgr = struct
     Fiber.with_binding id (string_of_int self) fn
 end
 
-let create =
-  let handler = Eio.Domain_manager.Pi.mgr (module Fake_domain_mgr) in
-  fun () -> Eio.Resource.T (Fake_domain_mgr.create (), handler)
+let create () =
+  Eio.Domain_manager.Pi.make (module Fake_domain_mgr) (Fake_domain_mgr.create ())
 
 let run fn =
   let dm = create () in

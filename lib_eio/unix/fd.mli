@@ -86,3 +86,7 @@ val stderr : t
 
 val pp : t Fmt.t
 (** Displays the FD number. *)
+
+(** {2 Resource store *)
+
+val key : t Eio.Resource_store.accessor

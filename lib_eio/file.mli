@@ -3,62 +3,20 @@
 
     To get an open file, use the functions in the {!Path} module. *)
 
-open Std
-
 (** {2 Types} *)
 
 (** Traditional Unix permissions. *)
-module Unix_perm : sig
-  type t = int
-  (** This is the same as {!Unix.file_perm}, but avoids a dependency on [Unix]. *)
-end
+module Unix_perm = Stat.Unix_perm
 
 (** Portable file stats. *)
-module Stat : sig
+module Stat = Stat
 
-  type kind = [
-    | `Unknown
-    | `Fifo
-    | `Character_special
-    | `Directory
-    | `Block_device
-    | `Regular_file
-    | `Symbolic_link
-    | `Socket
-  ]
-  (** Kind of file from st_mode. **)
+(* CR mbarbin: Decide whether to keep or not the aliases. *)
 
-  val pp_kind : kind Fmt.t
-  (** Pretty printer for {! kind}. *)
-
-  type t = {
-    dev : Int64.t;              (** Device containing the filesystem where the file resides. *)
-    ino : Int64.t;              (** Inode number. *)
-    kind : kind;                (** File type. *)
-    perm : Unix_perm.t;         (** Permissions (mode). *)
-    nlink : Int64.t;            (** Number of hard links. *)
-    uid : Int64.t;              (** User ID of owner. *)
-    gid : Int64.t;              (** Group ID of owner. *)
-    rdev : Int64.t;             (** Device's ID (if this is a device). *)
-    size : Optint.Int63.t;      (** Total size in bytes. *)
-    atime : float;              (** Last access time. *)
-    mtime : float;              (** Last modification time. *)
-    ctime : float;              (** Creation time. *)
-  }
-  (** Like stat(2). *)
-
-  val pp : t Fmt.t
-  (** Pretty printer for {! t}. *)
-end
-
-type ro_ty = [`File | Flow.source_ty | Resource.close_ty]
-
-type 'a ro = ([> ro_ty] as 'a) r
+type ('a, 'r) ro = ('a, 'r) File_ro.t
 (** A file opened for reading. *)
 
-type rw_ty = [ro_ty | Flow.sink_ty]
-
-type 'a rw = ([> rw_ty] as 'a) r
+type ('a, 'r) rw = ('a, 'r) File_rw.t
 (** A file opened for reading and writing. *)
 
 (** {2 Metadata} *)
@@ -112,30 +70,5 @@ val truncate : _ rw -> Optint.Int63.t -> unit
 
 (** {2 Provider Interface} *)
 
-module Pi : sig
-  module type READ = sig
-    include Flow.Pi.SOURCE
-
-    val pread : t -> file_offset:Optint.Int63.t -> Cstruct.t list -> int
-    val stat : t -> Stat.t
-    val seek : t -> Optint.Int63.t -> [`Set | `Cur | `End] -> Optint.Int63.t
-    val close : t -> unit
-  end
-
-  module type WRITE = sig
-    include Flow.Pi.SINK
-    include READ with type t := t
-
-    val pwrite : t -> file_offset:Optint.Int63.t -> Cstruct.t list -> int
-    val sync : t -> unit
-    val truncate : t -> Optint.Int63.t -> unit
-  end
-
-  type (_, _, _) Resource.pi +=
-    | Read : ('t, (module READ with type t = 't), [> ro_ty]) Resource.pi
-    | Write : ('t, (module WRITE with type t = 't), [> rw_ty]) Resource.pi
-
-  val ro : (module READ with type t = 't) -> ('t, ro_ty) Resource.handler
-
-  val rw : (module WRITE with type t = 't) -> ('t, rw_ty) Resource.handler
-end
+module Ro = File_ro
+module Rw = File_rw

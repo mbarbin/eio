@@ -20,7 +20,7 @@ let stdout = Eio_mock.Flow.make "stdout"
     `Raise End_of_file
   ];
   Eio.Flow.copy stdin stdout;
-  Eio.Flow.close stdin;
+  Eio_mock.Flow.close stdin;
   Eio.Flow.shutdown stdout `Send;;
 +stdin: read "chunk1"
 +stdout: wrote "chunk1"
@@ -38,8 +38,12 @@ A simple test server:
 ```ocaml
 let echo_server ~net addr =
   Switch.run @@ fun sw ->
-  let socket = Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr in
-  Eio.Net.accept_fork socket ~sw (fun flow _addr -> Eio.Flow.copy flow flow)
+  let (Eio.Net.Listening_socket.T socket) =
+    Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr
+  in
+  Eio.Net.accept_fork socket ~sw
+    { connection_handler = (fun flow _addr ->
+       Eio.Flow.copy flow flow) }
     ~on_error:(traceln "Error handling connection: %a" Fmt.exn);;
 ```
 

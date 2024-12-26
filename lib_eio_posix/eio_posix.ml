@@ -22,21 +22,22 @@ let run main =
   (* SIGPIPE makes no sense in a modern application. *)
   Sys.(set_signal sigpipe Signal_ignore);
   Eio_unix.Process.install_sigchld_handler ();
-  let stdin = (Flow.of_fd Eio_unix.Fd.stdin :> _ Eio_unix.source) in
-  let stdout = (Flow.of_fd Eio_unix.Fd.stdout :> _ Eio_unix.sink) in
-  let stderr = (Flow.of_fd Eio_unix.Fd.stderr :> _ Eio_unix.sink) in
-  Domain_mgr.run_event_loop main @@ object (_ : stdenv)
+  let stdin = (Flow.of_fd Eio_unix.Fd.stdin |> Eio_unix.Flow.Cast.as_generic_source) in
+  let stdout = (Flow.of_fd Eio_unix.Fd.stdout |> Eio_unix.Flow.Cast.as_generic_sink) in
+  let stderr = (Flow.of_fd Eio_unix.Fd.stderr |> Eio_unix.Flow.Cast.as_generic_sink) in
+  let net = Net.v () in
+  Domain_mgr.run_event_loop main @@ (object
     method stdin = stdin
     method stdout = stdout
     method stderr = stderr
     method debug = Eio.Private.Debug.v
     method clock = Time.clock
     method mono_clock = Time.mono_clock
-    method net = Net.v
+    method net = net
     method process_mgr = Process.mgr
     method domain_mgr = Domain_mgr.v
-    method cwd = ((Fs.cwd, "") :> Eio.Fs.dir_ty Eio.Path.t)
-    method fs = ((Fs.fs, "") :> Eio.Fs.dir_ty Eio.Path.t)
+    method cwd = (Eio.Path.Path (Fs.cwd, "") :> Eio.Path.t)
+    method fs = (Eio.Path.Path (Fs.fs, "") :> Eio.Path.t)
     method secure_random = Flow.secure_random
     method backend_id = "posix"
-  end
+  end)

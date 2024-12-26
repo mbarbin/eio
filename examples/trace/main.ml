@@ -39,23 +39,23 @@ let trace ~finished (clock, delay) cursor =
   aux ()
 
 (* The program to be traced. *)
-let main net =
+let main (Eio_unix.Net.T net) =
   Switch.run ~name:"main" @@ fun sw ->
   let addr = `Tcp (Eio.Net.Ipaddr.V4.loopback, 8123) in
-  let s = Eio.Net.listen ~sw ~backlog:1 ~reuse_addr:true net addr in
+  let (Eio.Net.Listening_socket.T s) = Eio.Net.listen ~sw ~backlog:1 ~reuse_addr:true net addr in
   Fiber.both
     (fun () ->
        traceln "server: starting";
-       let c, _addr = Eio.Net.accept ~sw s in
+       let (Eio.Net.Stream_socket.T c, _addr) = Eio.Net.accept ~sw s in
        traceln "server: got connection from client";
        let msg = Eio.Flow.read_all c in
        traceln "server: read %S from socket" msg
     )
     (fun () ->
        traceln "client: connecting socket...";
-       let c = Eio.Net.connect ~sw net addr in
+       let (Eio.Net.Stream_socket.T c) = Eio.Net.connect ~sw net addr in
        Eio.Flow.copy_string "Hello" c;
-       Eio.Flow.close c
+       Eio.Net.Stream_socket.close c
     )
 
 (* Enable tracing then run the [main] and [trace] fibers. *)

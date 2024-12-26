@@ -2,6 +2,7 @@
 # #require "eio";;
 # #require "eio.mock";;
 ```
+
 ```ocaml
 open Eio.Std
 
@@ -265,14 +266,12 @@ module Slow_writer = struct
     copy t ~src:(Eio.Flow.cstruct_source bufs);
     Cstruct.lenv bufs
 end
-let slow_writer =
-  let ops = Eio.Flow.Pi.sink (module Slow_writer) in
-  Eio.Resource.T ((), ops)
+let slow_writer = Eio.Flow.Sink.make (module Slow_writer) ()
 ```
 
 ```ocaml
 # Eio_mock.Backend.run @@ fun () ->
-  Write.with_flow slow_writer @@ fun t ->
+  Write.with_sink slow_writer @@ fun t ->
   Write.string t "test";
   Write.flush t;
   traceln "Flush complete"
@@ -449,6 +448,7 @@ And with `with_flow`:
 
 ```ocaml
 # Eio_mock.Backend.run @@ fun () ->
+  let flow = Eio_mock.Flow.make "flow" in
   Eio_mock.Flow.on_copy_bytes flow [`Raise (Failure "Simulated IO error")];
   Switch.run @@ fun sw ->
   Write.with_flow flow @@ fun t ->

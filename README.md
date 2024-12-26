@@ -141,7 +141,8 @@ We use [Eio_main.run][] to run the event loop and call `main` from there:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  main (Eio.Stdenv.stdout env);;
+  let (Eio.Flow.Sink.T stdout) = Eio.Stdenv.stdout env in
+  main stdout;;
 Hello, world!
 - : unit = ()
 ```
@@ -390,7 +391,7 @@ Here is a client that connects to address `addr` using network `net` and reads a
 let run_client ~net ~addr =
   Switch.run ~name:"client" @@ fun sw ->
   traceln "Client: connecting to server";
-  let flow = Eio.Net.connect ~sw net addr in
+  let (Eio.Net.Stream_socket.T flow) = Eio.Net.connect ~sw net addr in
   (* Read all data until end-of-stream (shutdown): *)
   traceln "Client: received %S" (Eio.Flow.read_all flow)
 ```
@@ -425,7 +426,7 @@ This can also be tested on its own using a mock network:
 
 ```ocaml
 let run_server socket =
-  Eio.Net.run_server socket handle_client
+  Eio.Net.run_server socket { connection_handler = handle_client }
     ~on_error:(traceln "Error handling connection: %a" Fmt.exn)
 ```
 
@@ -434,9 +435,11 @@ Note: when `handle_client` finishes, `run_server` closes the flow automatically.
 We can now run the client and server together using the real network (in a single process):
 
 ```ocaml
-let main ~net ~addr =
+let main ~net:(Eio_unix.Net.T net) ~addr =
   Switch.run ~name:"main" @@ fun sw ->
-  let server = Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr in
+  let (Eio.Net.Listening_socket.T server) =
+    Eio.Net.listen net ~sw ~reuse_addr:true ~backlog:5 addr
+  in
   Fiber.fork_daemon ~sw (fun () -> run_server server);
   run_client ~net ~addr
 ```
@@ -526,9 +529,10 @@ Let's try it with some test data (you could use the real stdin if you prefer):
 
 ```ocaml
 # Eio_main.run @@ fun env ->
+  let (Eio.Flow.Sink.T stdout) = Eio.Stdenv.stdout env in
   cli
     ~stdin:(Eio.Flow.string_source "help\nexit\nquit\nbye\nstop\n")
-    ~stdout:(Eio.Stdenv.stdout env);;
+    ~stdout;;
 +> help
 It's just an example
 +> exit
@@ -706,7 +710,7 @@ To avoid this problem, you can use `Eio.Exn.Backend.show` to hide the backend-sp
 - : unit = ()
 
 # Eio_main.run @@ fun env ->
-  let net = Eio.Stdenv.net env in
+  let (Eio_unix.Net.T net) = Eio.Stdenv.net env in
   Switch.run @@ fun sw ->
   Eio.Net.connect ~sw net (`Tcp (Eio.Net.Ipaddr.V4.loopback, 1234));;
 Exception:
@@ -860,7 +864,7 @@ Spawning a child process can be done using the [Eio.Process][] module:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env in
+  let (Eio_unix.Process.Mgr proc_mgr) = Eio.Stdenv.process_mgr env in
   Eio.Process.run proc_mgr ["echo"; "hello"];;
 hello
 - : unit = ()
@@ -871,7 +875,7 @@ For example, we can use `tr` to convert some text to upper-case:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env in
+  let (Eio_unix.Process.Mgr proc_mgr) = Eio.Stdenv.process_mgr env in
   Eio.Process.run proc_mgr ["tr"; "a-z"; "A-Z"]
     ~stdin:(Eio.Flow.string_source "One two three\n");;
 ONE TWO THREE
@@ -883,7 +887,7 @@ or use the `parse_out` convenience wrapper:
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env in
+  let (Eio_unix.Process.Mgr proc_mgr) = Eio.Stdenv.process_mgr env in
   Eio.Process.parse_out proc_mgr Eio.Buf_read.line ["echo"; "hello"];;
 - : string = "hello"
 ```
@@ -892,7 +896,7 @@ All process functions either return the exit status or check that it was zero (s
 
 ```ocaml
 # Eio_main.run @@ fun env ->
-  let proc_mgr = Eio.Stdenv.process_mgr env in
+  let (Eio_unix.Process.Mgr proc_mgr) = Eio.Stdenv.process_mgr env in
   Eio.Process.parse_out proc_mgr Eio.Buf_read.take_all ["sh"; "-c"; "exit 3"];;
 Exception:
 Eio.Io Process Child_error Exited (code 3),
@@ -1338,8 +1342,8 @@ Protecting the file with a mutex will prevent that:
 
 ```ocaml
 module Atomic_file = struct
-  type 'a t = {
-    path : 'a Eio.Path.t;
+  type t = {
+    path : Eio.Path.t;
     mutex : Eio.Mutex.t;
   }
 
@@ -1614,9 +1618,7 @@ module Zero = struct
   let read_methods = []         (* Optional optimisations *)
 end
 
-let ops = Eio.Flow.Pi.source (module Zero)
-
-let zero = Eio.Resource.T ((), ops)
+let zero = Eio.Flow.Source.make (module Zero) ()
 ```
 
 It can then be used like any other Eio flow:
@@ -1764,6 +1766,7 @@ and what lifetime to give them, which is confusing if this is not needed.
 Creating the switch inside your function ensures that all resources are released
 promptly.
 
+<!-- $MDX skip -->
 ```ocaml
 (* BAD - switch should be created internally instead *)
 let load_config ~sw path =
@@ -1805,15 +1808,14 @@ If you want to store the argument, this may require you to cast internally:
 ```ocaml
 module Foo : sig
   type t
-  val of_source : _ Eio.Flow.source -> t
+  val of_source : _ Eio.Flow.Source.t -> t
 end = struct
   type t = {
-    src : Eio.Flow.source_ty r;
+    src : Eio.Flow.Source.r;
   }
 
-  let of_source x = {
-    src = (x :> Eio.Flow.source_ty r);
-  }
+  let of_source (type a) (src : (a, _) Eio.Flow.Source.t) =
+    { src = Eio.Flow.Source.T (src :> a Eio.Flow.Source.t') }
 end
 ```
 

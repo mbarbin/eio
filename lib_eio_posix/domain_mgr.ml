@@ -46,7 +46,7 @@ let run_event_loop fn x =
       | Eio_unix.Net.Import_socket_stream (sw, close_unix, unix_fd) -> Some (fun k ->
           let fd = Fd.of_unix ~sw ~blocking:false ~close_unix unix_fd in
           Unix.set_nonblock unix_fd;
-          continue k (Flow.of_fd fd :> _ Eio_unix.Net.stream_socket)
+          continue k (Flow.of_fd fd |> Eio_unix.Flow.Cast.as_unix_stream_socket)
         )
       | Eio_unix.Net.Import_socket_listening (sw, close_unix, unix_fd) -> Some (fun k ->
           let fd = Fd.of_unix ~sw ~blocking:false ~close_unix unix_fd in
@@ -59,7 +59,7 @@ let run_event_loop fn x =
           continue k (Net.datagram_socket fd)
         )
       | Eio_unix.Net.Socketpair_stream (sw, domain, protocol) -> Some (fun k ->
-          let wrap fd = (Flow.of_fd fd :> _ Eio_unix.Net.stream_socket) in
+          let wrap fd = (Flow.of_fd fd |> Eio_unix.Flow.Cast.as_unix_stream_socket) in
           socketpair k ~sw ~domain ~protocol ~ty:Unix.SOCK_STREAM wrap wrap
         )
       | Eio_unix.Net.Socketpair_datagram (sw, domain, protocol) -> Some (fun k ->
@@ -69,8 +69,8 @@ let run_event_loop fn x =
       | Eio_unix.Private.Pipe sw -> Some (fun k ->
           match
             let r, w = Low_level.pipe ~sw in
-            let source = Flow.of_fd r in
-            let sink = Flow.of_fd w in
+            let source = Flow.of_fd r |> Eio_unix.Flow.Cast.as_unix_source in
+            let sink = Flow.of_fd w |> Eio_unix.Flow.Cast.as_unix_sink in
             (source, sink)
           with
           | r -> continue k r
@@ -122,6 +122,4 @@ module Impl = struct
     unwrap_backtrace (Domain.join (Option.get !domain))
 end
 
-let v =
-  let handler = Eio.Domain_manager.Pi.mgr (module Impl) in
-  Eio.Resource.T ((), handler)
+let v = Eio.Domain_manager.Pi.make (module Impl) ()
